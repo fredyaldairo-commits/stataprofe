@@ -27,6 +27,7 @@ const K = {
   subidos: 'stataprofe.subidos',
   guardadas: 'stataprofe.guardadas',
   hist: 'stataprofe.hist',
+  paneles: 'stataprofe.paneles',
 };
 const leer = (k, def) => { try { const v = localStorage.getItem(k); return v === null ? def : JSON.parse(v); } catch { return def; } };
 const escribir = (k, v) => { try { localStorage.setItem(k, JSON.stringify(v)); } catch { /* sin espacio */ } };
@@ -36,7 +37,7 @@ let verProfe = leer(K.verProfe, true);
 
 // ─────────────────────────────────────────────── ganchos de la sesión
 ses.ganchos = {
-  alCargar: () => { pintarEstado(); pintarDatos(); },
+  alCargar: () => { pintarEstado(); pintarDatos(); pintarVarsLateral(); },
   abrirTabla: () => cambiarVista('datos'),
   abrirEditor: () => cambiarVista('dofile'),
   guardarLocal: (nombre) => {
@@ -132,8 +133,12 @@ function nodoCoef(fit, op = {}) {
       <div class="coef-nota" data-nota="${i}"><div class="in"><span class="k">Cómo se lee</span><span data-txt="${i}"></span></div></div>`;
   }).join('');
 
+  // algunas tablas (nlcom, lincom, ecuaciones sueltas de mlogit) no traen N ni R²
+  const partesCab = [esc(fit.depvar || '')];
+  if (fit.N !== undefined && fit.N !== null) partesCab.push(`${fit.N} observaciones`);
+  if (fit.r2 !== undefined && !isNaN(fit.r2)) partesCab.push(`R² ${(fit.r2 * 100).toFixed(1)}%`);
   d.innerHTML = `<div class="coef-cab">
-      <span>${esc(fit.depvar || '')} · ${fit.N} observaciones${fit.r2 !== undefined && !isNaN(fit.r2) ? ' · R² ' + (fit.r2 * 100).toFixed(1) + '%' : ''}</span>
+      <span>${partesCab.filter(Boolean).join(' · ')}</span>
       <span class="pista">↓ toca una fila para que te la explique</span>
     </div>
     <div class="coef-scroll"><div class="coef-tabla">
@@ -199,10 +204,162 @@ function correr(linea, destino = $('#salida'), { eco = true } = {}) {
   render(bloques, destino);
   destino.scrollTop = destino.scrollHeight;
   ses.registro.push({ linea, bloques });
+  anotarRevision(linea, bloques);
   revisarLeccion(linea, bloques);
   pintarEstado();
+  pintarVarsLateral();
   if (vistaActual === 'datos') pintarDatos();
   return bloques;
+}
+
+// ─────────────────────────────────────────────── ventana de revisión (izquierda)
+const revision = [];   // {n, linea, error}
+
+function anotarRevision(linea, bloques) {
+  revision.push({ n: revision.length + 1, linea, error: bloques.some((b) => b.t === 'err') });
+  pintarRevision();
+}
+
+function pintarRevision() {
+  const cont = $('#listaRevision');
+  if (!cont) return;
+  const f = ($('#filtroRev').value || '').toLowerCase();
+  const lista = revision.filter((r) => !f || r.linea.toLowerCase().includes(f));
+  if (!lista.length) {
+    cont.innerHTML = `<div class="panel-vacio">${revision.length ? 'Ningún comando coincide' : 'No hay elementos para mostrar'}</div>`;
+    return;
+  }
+  cont.innerHTML = lista.slice(-300).map((r) =>
+    `<div class="rev-item ${r.error ? 'malo' : ''}" data-linea="${esc(r.linea)}" title="${esc(r.linea)}${r.error ? '  (dio error)' : ''}">
+      <span class="rn">${r.n}</span><span class="rc">${esc(r.linea)}</span></div>`).join('');
+  cont.querySelectorAll('.rev-item').forEach((el) => {
+    el.addEventListener('click', () => {
+      cambiarVista('consola');
+      $('#entrada').value = el.dataset.linea;
+      $('#entrada').focus();
+    });
+    el.addEventListener('dblclick', () => {
+      const b = $('.bienvenida'); if (b) b.remove();
+      correr(el.dataset.linea, $('#salida'));
+    });
+  });
+  cont.scrollTop = cont.scrollHeight;
+}
+
+// ─────────────────────────────────────────────── panel de variables (derecha)
+function pintarVarsLateral() {
+  const cont = $('#varsLateral');
+  if (!cont) return;
+  if (!ses.ds.cargado) {
+    cont.innerHTML = '<div class="panel-vacio">No hay elementos para mostrar</div>';
+    return;
+  }
+  const f = ($('#filtroVarLat').value || '').toLowerCase();
+  const lista = ses.ds.vars.filter((v) => !f || v.name.toLowerCase().includes(f) || (v.label || '').toLowerCase().includes(f));
+  if (!lista.length) { cont.innerHTML = '<div class="panel-vacio">Ninguna variable coincide</div>'; return; }
+  cont.innerHTML = lista.map((v) =>
+    `<div class="var-lat ${v.type === 'string' ? 'texto' : ''}" data-v="${esc(v.name)}" title="${esc(v.name)}${v.label ? ' — ' + esc(v.label) : ''}${v.type === 'string' ? '  (texto: no entra en modelos)' : ''}">
+      <span class="vn">${esc(v.name)}</span><span class="ve">${esc(v.label || '')}</span></div>`).join('');
+  cont.querySelectorAll('.var-lat').forEach((el) => el.addEventListener('click', () => {
+    const inp = $('#entrada');
+    inp.value = (inp.value.trim() ? inp.value.replace(/\s+$/, '') + ' ' : '') + el.dataset.v;
+    inp.focus();
+  }));
+}
+
+// ─────────────────────────────────────────────── menús desplegables
+const MENUS = {
+  graficos: [
+    { grupo: 'Una variable' },
+    { t: 'Histograma', c: 'histogram ingreso, normal', d: 'forma de la distribución' },
+    { t: 'Densidad suavizada', c: 'kdensity ingreso', d: 'versión suave del histograma' },
+    { t: 'Normalidad (Q-Q)', c: 'qnorm', d: 'residuos del último modelo' },
+    { grupo: 'Dos variables' },
+    { t: 'Nube de puntos', c: 'scatter ingreso educ', d: '' },
+    { t: 'Nube con recta ajustada', c: 'twoway (scatter ingreso educ) (lfit ingreso educ)', d: 'la recta es la regresión' },
+    { grupo: 'Por grupos' },
+    { t: 'Cajas por grupo', c: 'graph box ingreso, over(tamano)', d: 'mediana, cuartiles y atípicos' },
+    { t: 'Barras de promedios', c: 'graph bar (mean) ingreso, over(tamano)', d: 'con barras de error' },
+    { grupo: 'Después de un modelo' },
+    { t: 'Residuos vs ajustados', c: 'rvfplot', d: 'detecta heterocedasticidad' },
+    { t: 'Curva ROC', c: 'lroc', d: 'después de logit o probit' },
+    { t: 'Sensibilidad / especificidad', c: 'lsens', d: 'elegir el punto de corte' },
+    { t: 'Gráfico de efectos marginales', c: 'marginsplot', d: 'después de margins' },
+  ],
+  estadisticas: [
+    { grupo: 'Descriptivas' },
+    { t: 'Resumen', c: 'summarize ingreso educ exper', d: 'media, desviación, mín y máx' },
+    { t: 'Resumen detallado', c: 'summarize ingreso, detail', d: 'con percentiles y asimetría' },
+    { t: 'Tabla de frecuencias', c: 'tab tamano', d: '' },
+    { t: 'Tabla cruzada con chi²', c: 'tab tamano formal, row chi2', d: '' },
+    { t: 'Estadísticos por grupo', c: 'tabstat ingreso, by(tamano) stats(n mean sd)', d: '' },
+    { t: 'Correlaciones', c: 'correlate ingreso educ exper horas', d: '' },
+    { grupo: 'Pruebas de medias' },
+    { t: 'Prueba t entre dos grupos', c: 'ttest ingreso, by(mujer)', d: '' },
+    { t: 'ANOVA de una vía', c: 'oneway ingreso tamano, tabulate bonferroni', d: 'con comparaciones post-hoc' },
+    { t: 'Igualdad de varianzas', c: 'robvar ingreso, by(tamano)', d: 'prueba de Levene' },
+    { grupo: 'Normalidad' },
+    { t: 'Shapiro-Wilk', c: 'swilk u', d: 'antes: predict u, resid' },
+    { t: 'Asimetría y curtosis', c: 'sktest u', d: 'antes: predict u, resid' },
+    { grupo: 'Supuestos del modelo' },
+    { t: 'Multicolinealidad (VIF)', c: 'estat vif', d: '' },
+    { t: 'Heterocedasticidad', c: 'estat hettest', d: 'Breusch-Pagan' },
+    { t: 'Prueba de White', c: 'estat imtest, white', d: '' },
+    { t: 'Forma funcional (RESET)', c: 'estat ovtest', d: '' },
+    { t: 'Especificación', c: 'linktest', d: '_hatsq no debe ser significativa' },
+    { grupo: 'Después de un modelo' },
+    { t: 'Efectos marginales', c: 'margins, dydx(*)', d: 'obligatorio tras logit/probit' },
+    { t: 'Medias ajustadas por grupo', c: 'margins tamano', d: '' },
+    { t: 'Combinación no lineal', c: 'nlcom -_b[exper]/(2*_b[exper2])', d: 'punto de giro de un cuadrático' },
+    { t: 'Comparaciones por pares', c: 'pwcompare tamano, mcompare(bonferroni)', d: '' },
+    { t: 'Clasificación', c: 'estat classification', d: 'sensibilidad y especificidad' },
+    { t: 'Bondad de ajuste', c: 'estat gof, group(10)', d: 'Hosmer-Lemeshow' },
+    { t: 'Supuesto IIA', c: 'mlogtest, hausman', d: 'después de mlogit' },
+  ],
+  ventana: [
+    { grupo: 'Paneles' },
+    { t: 'Ventana de revisión', accion: () => alternarPanel('panelRevision'), d: 'historial de comandos' },
+    { t: 'Panel de variables', accion: () => alternarPanel('panelVariables'), d: 'lista de columnas' },
+    { grupo: 'Sesión' },
+    { t: 'Limpiar la consola', accion: () => { $('#salida').innerHTML = ''; }, d: '' },
+    { t: 'Descargar el log', accion: () => descargarTexto('sesion_stataprofe.txt', logCompleto()), d: '' },
+    { t: 'Exportar los datos a CSV', accion: () => descargarCSV(), d: '' },
+  ],
+};
+
+function abrirMenu(nombre, boton) {
+  const caja = $('#menuDesplegable');
+  if (caja.classList.contains('abierto') && caja.dataset.menu === nombre) { cerrarMenu(); return; }
+  const items = MENUS[nombre] || [];
+  caja.dataset.menu = nombre;
+  caja.innerHTML = items.map((it, k) => {
+    if (it.grupo) return `<div class="md-grupo">${esc(it.grupo)}</div>`;
+    return `<button class="md-item" data-k="${k}">${esc(it.t)}${it.d ? `<small>${it.c ? esc(it.c) : esc(it.d)}</small>` : ''}</button>`;
+  }).join('');
+  caja.querySelectorAll('.md-item').forEach((el) => el.addEventListener('click', () => {
+    const it = items[Number(el.dataset.k)];
+    cerrarMenu();
+    if (it.accion) { it.accion(); return; }
+    cambiarVista('consola');
+    $('#entrada').value = it.c;
+    $('#entrada').focus();
+    toast('Comando listo: revísalo y dale Enter');
+  }));
+  const r = boton.getBoundingClientRect();
+  caja.style.left = Math.min(r.left, innerWidth - 280) + 'px';
+  caja.style.top = r.bottom + 'px';
+  caja.classList.add('abierto');
+  $$('.menu-btn').forEach((b) => b.classList.toggle('abierto', b.dataset.menu === nombre));
+}
+function cerrarMenu() {
+  $('#menuDesplegable').classList.remove('abierto');
+  $$('.menu-btn').forEach((b) => b.classList.remove('abierto'));
+}
+function alternarPanel(id) {
+  const p = $('#' + id);
+  p.classList.toggle('oculto');
+  const b = document.querySelector(`.be-paneles button[data-abrir="${id}"]`);
+  if (b) b.classList.toggle('escondido', !p.classList.contains('oculto'));
 }
 
 // ─────────────────────────────────────────────── estado y datos
@@ -805,7 +962,18 @@ document.addEventListener('click', (e) => {
   }
 });
 
-$$('.tab').forEach((t) => t.addEventListener('click', () => cambiarVista(t.dataset.vista)));
+$$('.tab').forEach((t) => t.addEventListener('click', () => { cerrarMenu(); cambiarVista(t.dataset.vista); }));
+$$('.menu-btn').forEach((b) => b.addEventListener('click', (e) => { e.stopPropagation(); abrirMenu(b.dataset.menu, b); }));
+document.addEventListener('click', (e) => {
+  if (!e.target.closest('#menuDesplegable') && !e.target.closest('.menu-btn')) cerrarMenu();
+});
+document.addEventListener('keydown', (e) => { if (e.key === 'Escape') cerrarMenu(); });
+
+// paneles laterales
+$$('.panel-x').forEach((b) => b.addEventListener('click', () => alternarPanel(b.dataset.cerrar)));
+$$('.be-paneles button').forEach((b) => b.addEventListener('click', () => alternarPanel(b.dataset.abrir)));
+$('#filtroRev').addEventListener('input', pintarRevision);
+$('#filtroVarLat').addEventListener('input', pintarVarsLateral);
 
 // do-file
 const editor = $('#editor');
@@ -840,7 +1008,9 @@ function correrDoFile(texto) {
     t.textContent = `línea ${r.numero}:  ${r.linea}`;
     dest.appendChild(t);
     render(r.bloques, dest);
+    anotarRevision(r.linea, r.bloques);
   }
+  pintarVarsLateral();
   // valida lecciones de do-file con el contenido completo
   if (leccionActiva) {
     const v = leccionActiva.leccion.validar || {};
@@ -1004,6 +1174,14 @@ $('#btnAjustes').addEventListener('click', () => {
   $('#estadoClave').textContent = tieneClave() ? '✅ Hay una clave guardada en este dispositivo.' : 'Sin clave: el chat libre está desactivado (el resto funciona igual).';
   $('#chkGrande').checked = leer(K.grande, false);
   $('#chkProfe').checked = verProfe;
+  $('#chkPaneles').checked = !$('#panelVariables').classList.contains('oculto');
+});
+$('#chkPaneles').addEventListener('change', (e) => {
+  escribir(K.paneles, e.target.checked);
+  for (const id of ['panelRevision', 'panelVariables']) {
+    const p = $('#' + id);
+    if (p.classList.contains('oculto') === e.target.checked) alternarPanel(id);
+  }
 });
 $('#ajustesX').addEventListener('click', () => $('#modalAjustes').classList.remove('abierto'));
 $('#modalAjustes').addEventListener('click', (e) => { if (e.target.id === 'modalAjustes') e.currentTarget.classList.remove('abierto'); });
@@ -1106,6 +1284,11 @@ historial = leer(K.hist, []);
 posHist = historial.length;
 pintarEstado();
 pintarCurso();
+pintarRevision();
+pintarVarsLateral();
+// los botones de la barra de estado solo aparecen cuando el panel está oculto
+$$('.be-paneles button').forEach((b) => b.classList.add('escondido'));
+if (!leer(K.paneles, true)) { alternarPanel('panelRevision'); alternarPanel('panelVariables'); }
 $('#entrada').focus();
 
 // si nunca ha hecho nada, sugerir el curso

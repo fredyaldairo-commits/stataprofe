@@ -15,36 +15,53 @@
 </head>
 <body>
 
-<header class="top">
-  <div class="brand">
-    <span class="logo">📊</span>
-    <span>
-      <b>StataProfe</b>
-      <small>simulador con profesor incorporado</small>
-    </span>
-  </div>
-  <div class="top-estado" id="estadoBase">sin base abierta</div>
-  <div class="top-acciones">
-    <button class="btn-icono" id="btnSubir" title="Subir tus propios datos (CSV)">📤<span>Subir datos</span></button>
-    <button class="btn-icono" id="btnLog" title="Descargar todo lo que hiciste">💾<span>Log</span></button>
-    <button class="btn-icono" id="btnTema" title="Cambiar entre claro y oscuro">🌓</button>
-    <button class="btn-icono" id="btnAjustes" title="Ajustes y clave de Gemini">⚙️</button>
-  </div>
+<!-- ═══════════════════ barra de título ═══════════════════ -->
+<header class="titulo-barra">
+  <span class="tb-icono">📊</span>
+  <span class="tb-nombre">StataProfe <span class="tb-ed">IC</span></span>
+  <div class="tb-sp"></div>
+  <button class="tb-btn" id="btnSubir" title="Abrir tus propios datos (CSV)">📤<span>Abrir</span></button>
+  <button class="tb-btn" id="btnLog" title="Descargar todo lo que hiciste">💾<span>Log</span></button>
+  <button class="tb-btn" id="btnTema" title="Claro / oscuro">🌓</button>
+  <button class="tb-btn" id="btnAjustes" title="Ajustes">⚙️</button>
 </header>
 
-<nav class="tabs" id="tabs">
+<!-- ═══════════════════ barra de menús ═══════════════════ -->
+<nav class="menu-barra" id="tabs">
   <button class="tab activa" data-vista="consola">Consola</button>
   <button class="tab" data-vista="dofile">Do-file</button>
   <button class="tab" data-vista="datos">Datos</button>
+  <button class="menu-btn" data-menu="graficos">Gráficos ▾</button>
+  <button class="menu-btn" data-menu="estadisticas">Estadísticas ▾</button>
   <button class="tab" data-vista="modelos">Modelos</button>
   <button class="tab" data-vista="curso">Curso <span class="pip" id="pipCurso"></span></button>
+  <button class="menu-btn" data-menu="ventana">Ventana ▾</button>
   <button class="tab" data-vista="ayuda">Ayuda</button>
 </nav>
+<div class="menu-desplegable" id="menuDesplegable"></div>
 
-<main>
-  <!-- ───────────────────────────── consola -->
-  <section class="vista activa" id="v-consola">
-    <div class="col-salida">
+<!-- ═══════════════════ escritorio ═══════════════════ -->
+<div class="escritorio">
+
+  <!-- panel izquierdo: ventana de revisión -->
+  <aside class="panel panel-izq" id="panelRevision">
+    <div class="panel-cab">
+      <span class="panel-tit">Ventana de revisión</span>
+      <button class="panel-x" data-cerrar="panelRevision" title="Ocultar">✕</button>
+    </div>
+    <div class="panel-filtro">
+      <input type="search" id="filtroRev" placeholder="Filtrar comandos aquí">
+    </div>
+    <div class="panel-encab"><span>#</span><span>Comando</span></div>
+    <div class="panel-lista" id="listaRevision">
+      <div class="panel-vacio">No hay elementos para mostrar</div>
+    </div>
+  </aside>
+
+  <!-- centro -->
+  <main>
+    <!-- ───────────────────────────── consola -->
+    <section class="vista activa" id="v-consola">
       <div class="salida" id="salida">
         <div class="bienvenida">
           <h1>Escribe comandos de Stata y te los corrijo.</h1>
@@ -56,84 +73,112 @@
             <button class="sug" data-cmd="reg ingreso educ exper mujer, robust">reg ingreso educ exper mujer, robust</button>
             <button class="sug" data-cmd="ayuda">ayuda</button>
           </div>
-          <p class="mini">¿No sabes cuál modelo usar? Anda a <b>Modelos</b>: están los 17 ordenados del más fácil al más difícil, cada uno con su ejemplo listo para correr. ¿Prefieres ir paso a paso? Anda a <b>Curso</b>: 14 módulos que se van desbloqueando de a poco.</p>
+          <p class="mini">¿No sabes cuál modelo usar? Anda a <b>Modelos</b>: están los 17 ordenados del más fácil al más difícil, cada uno con su ejemplo listo para correr. ¿Prefieres ir paso a paso? Anda a <b>Curso</b>.</p>
         </div>
       </div>
-      <form class="barra-cmd" id="formCmd" autocomplete="off">
-        <span class="prompt">.</span>
-        <input type="text" id="entrada" placeholder="escribe un comando…" autocapitalize="off" autocorrect="off" spellcheck="false">
-        <button type="submit" class="btn-run" title="Ejecutar (Enter)">▶</button>
-      </form>
-      <div class="autocompletar" id="autocompletar"></div>
-    </div>
-  </section>
+    </section>
 
-  <!-- ───────────────────────────── do-file -->
-  <section class="vista" id="v-dofile">
-    <div class="dofile-cab">
-      <div>
-        <b>Tu do-file</b>
-        <small>escribe varias líneas y córrelas todas juntas</small>
-      </div>
-      <div class="dofile-btns">
-        <button class="btn" id="btnCorrerDo">▶ Ejecutar todo</button>
-        <button class="btn sec" id="btnCorrerSel">Ejecutar selección</button>
-        <button class="btn sec" id="btnPlantilla">Plantilla</button>
-        <button class="btn sec" id="btnBajarDo">Descargar .do</button>
-      </div>
-    </div>
-    <div class="dofile-cuerpo">
-      <textarea id="editor" spellcheck="false" placeholder="* Escribe aquí tu do-file&#10;clear all&#10;set more off&#10;&#10;use enemdu_eloro_2024, clear"></textarea>
-      <div class="salida" id="salidaDo"></div>
-    </div>
-  </section>
-
-  <!-- ───────────────────────────── datos -->
-  <section class="vista" id="v-datos">
-    <div class="datos-cab">
-      <div class="datos-info" id="datosInfo">Abre una base para verla aquí.</div>
-      <input type="search" id="filtroVar" placeholder="filtrar variables…">
-    </div>
-    <div class="datos-cuerpo">
-      <div class="panel-vars" id="panelVars"></div>
-      <div class="tabla-scroll" id="tablaDatos"></div>
-    </div>
-  </section>
-
-  <!-- ───────────────────────────── modelos -->
-  <section class="vista" id="v-modelos">
-    <div class="modelos-cab">
-      <div>
-        <b>Los 17 modelos, del más fácil al más difícil</b>
-        <small>cada uno con su ejemplo listo para correr sobre la misma base</small>
-      </div>
-      <div class="filtro-fam" id="filtroFam"></div>
-    </div>
-    <div class="modelos-cuerpo" id="modelosCuerpo"></div>
-  </section>
-
-  <!-- ───────────────────────────── curso -->
-  <section class="vista" id="v-curso">
-    <div class="curso-cab">
-      <div class="prog">
-        <div class="prog-nivel">
-          <span class="nivel-nombre" id="nivelNombre">Aprendiz</span>
-          <span class="nivel-xp" id="nivelXP">0 XP</span>
+    <!-- ───────────────────────────── do-file -->
+    <section class="vista" id="v-dofile">
+      <div class="dofile-cab">
+        <div>
+          <b>Tu do-file</b>
+          <small>escribe varias líneas y córrelas todas juntas</small>
         </div>
-        <div class="prog-barra"><div class="prog-fill" id="progFill"></div></div>
-        <div class="prog-txt" id="progTxt">0 de 0 lecciones</div>
+        <div class="dofile-btns">
+          <button class="btn" id="btnCorrerDo">▶ Ejecutar todo</button>
+          <button class="btn sec" id="btnCorrerSel">Ejecutar selección</button>
+          <button class="btn sec" id="btnPlantilla">Plantilla</button>
+          <button class="btn sec" id="btnBajarDo">Descargar .do</button>
+        </div>
       </div>
-      <div class="insignias" id="insignias"></div>
-      <button class="btn sec" id="btnReiniciar">Reiniciar progreso</button>
-    </div>
-    <div class="curso-cuerpo" id="cursoCuerpo"></div>
-  </section>
+      <div class="dofile-cuerpo">
+        <textarea id="editor" spellcheck="false" placeholder="* Escribe aquí tu do-file&#10;clear all&#10;set more off&#10;&#10;use enemdu_eloro_2024, clear"></textarea>
+        <div class="salida" id="salidaDo"></div>
+      </div>
+    </section>
 
-  <!-- ───────────────────────────── ayuda -->
-  <section class="vista" id="v-ayuda">
-    <div class="ayuda-cuerpo" id="ayudaCuerpo"></div>
-  </section>
-</main>
+    <!-- ───────────────────────────── datos -->
+    <section class="vista" id="v-datos">
+      <div class="datos-cab">
+        <div class="datos-info" id="datosInfo">Abre una base para verla aquí.</div>
+        <input type="search" id="filtroVar" placeholder="filtrar variables…">
+      </div>
+      <div class="datos-cuerpo">
+        <div class="panel-vars" id="panelVars"></div>
+        <div class="tabla-scroll" id="tablaDatos"></div>
+      </div>
+    </section>
+
+    <!-- ───────────────────────────── modelos -->
+    <section class="vista" id="v-modelos">
+      <div class="modelos-cab">
+        <div>
+          <b>Los 17 modelos, del más fácil al más difícil</b>
+          <small>cada uno con su ejemplo listo para correr sobre la misma base</small>
+        </div>
+        <div class="filtro-fam" id="filtroFam"></div>
+      </div>
+      <div class="modelos-cuerpo" id="modelosCuerpo"></div>
+    </section>
+
+    <!-- ───────────────────────────── curso -->
+    <section class="vista" id="v-curso">
+      <div class="curso-cab">
+        <div class="prog">
+          <div class="prog-nivel">
+            <span class="nivel-nombre" id="nivelNombre">Aprendiz</span>
+            <span class="nivel-xp" id="nivelXP">0 XP</span>
+          </div>
+          <div class="prog-barra"><div class="prog-fill" id="progFill"></div></div>
+          <div class="prog-txt" id="progTxt">0 de 0 lecciones</div>
+        </div>
+        <div class="insignias" id="insignias"></div>
+        <button class="btn sec" id="btnReiniciar">Reiniciar progreso</button>
+      </div>
+      <div class="curso-cuerpo" id="cursoCuerpo"></div>
+    </section>
+
+    <!-- ───────────────────────────── ayuda -->
+    <section class="vista" id="v-ayuda">
+      <div class="ayuda-cuerpo" id="ayudaCuerpo"></div>
+    </section>
+  </main>
+
+  <!-- panel derecho: variables -->
+  <aside class="panel panel-der" id="panelVariables">
+    <div class="panel-cab">
+      <span class="panel-tit">Variables</span>
+      <button class="panel-x" data-cerrar="panelVariables" title="Ocultar">✕</button>
+    </div>
+    <div class="panel-filtro">
+      <input type="search" id="filtroVarLat" placeholder="Filtrar variables aquí">
+    </div>
+    <div class="panel-encab"><span>Nombre</span><span>Etiqueta</span></div>
+    <div class="panel-lista" id="varsLateral">
+      <div class="panel-vacio">No hay elementos para mostrar</div>
+    </div>
+  </aside>
+</div>
+
+<!-- ═══════════════════ barra de comando ═══════════════════ -->
+<form class="barra-cmd" id="formCmd" autocomplete="off">
+  <label class="cmd-etiqueta" for="entrada">Comando</label>
+  <input type="text" id="entrada" placeholder="escribe un comando…" autocapitalize="off" autocorrect="off" spellcheck="false">
+  <button type="submit" class="btn-run" title="Ejecutar (Enter)">▶</button>
+</form>
+<div class="autocompletar" id="autocompletar"></div>
+
+<!-- ═══════════════════ barra de estado ═══════════════════ -->
+<footer class="barra-estado">
+  <span id="estadoBase">sin base abierta</span>
+  <span class="be-sp"></span>
+  <span id="estadoPaneles" class="be-paneles">
+    <button data-abrir="panelRevision" title="Mostrar ventana de revisión">Revisión</button>
+    <button data-abrir="panelVariables" title="Mostrar panel de variables">Variables</button>
+  </span>
+  <span class="be-marca">StataProfe IC</span>
+</footer>
 
 <!-- panel de la lección activa -->
 <aside class="leccion-panel" id="leccionPanel">
@@ -171,6 +216,7 @@
     <h4>Apariencia</h4>
     <label class="check"><input type="checkbox" id="chkGrande"> Letra más grande (para tablet)</label>
     <label class="check"><input type="checkbox" id="chkProfe" checked> Mostrar las explicaciones del profesor</label>
+    <label class="check"><input type="checkbox" id="chkPaneles" checked> Mostrar los paneles laterales</label>
 
     <h4>Tus datos</h4>
     <p class="mini">Todo lo que haces se guarda solo en este dispositivo. Nada se sube a ningún servidor (excepto tus preguntas a Gemini, si activas esa opción).</p>

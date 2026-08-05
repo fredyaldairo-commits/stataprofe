@@ -76,6 +76,9 @@ export const COMANDOS = [
   { n: 'oneway', min: 6, cat: 'desc', ayuda: 'ANOVA de una vía' },
   { n: 'ranksum', min: 7, cat: 'desc', ayuda: 'prueba de Mann-Whitney' },
   { n: 'inspect', min: 3, cat: 'desc', ayuda: 'inspección rápida de una variable' },
+  { n: 'swilk', min: 5, cat: 'desc', ayuda: 'prueba de normalidad de Shapiro-Wilk' },
+  { n: 'sktest', min: 6, cat: 'desc', ayuda: 'normalidad por asimetría y curtosis' },
+  { n: 'robvar', min: 6, cat: 'desc', ayuda: 'prueba de Levene de igualdad de varianzas' },
 
   // --- gráficos ---
   { n: 'histogram', min: 4, cat: 'graf', ayuda: 'histograma' },
@@ -110,6 +113,9 @@ export const COMANDOS = [
   { n: 'test', min: 4, cat: 'post', ayuda: 'prueba una hipótesis' },
   { n: 'testparm', min: 8, cat: 'post', ayuda: 'prueba conjunta de un grupo' },
   { n: 'lincom', min: 6, cat: 'post', ayuda: 'combinación lineal de coeficientes' },
+  { n: 'nlcom', min: 5, cat: 'post', ayuda: 'combinación no lineal (método delta)' },
+  { n: 'pwcompare', min: 6, cat: 'post', ayuda: 'comparaciones por pares entre grupos' },
+  { n: 'mlogtest', min: 8, cat: 'post', ayuda: 'pruebas del supuesto IIA en mlogit' },
   { n: 'linktest', min: 8, cat: 'post', ayuda: 'prueba de forma funcional' },
   { n: 'estimates', min: 3, cat: 'post', ayuda: 'guarda y compara modelos' },
   { n: 'esttab', min: 6, cat: 'post', ayuda: 'tabla de varios modelos' },

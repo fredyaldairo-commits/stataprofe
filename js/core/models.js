@@ -1207,6 +1207,325 @@ export function hosmerLemeshow(y, p, g = 10) {
   return { chi2, df, p: pChi2(chi2, df), groups: grupos };
 }
 
+/** Prueba de Levene / Brown-Forsythe de igualdad de varianzas entre grupos. */
+export function levene(valores, grupos, { centro = 'media' } = {}) {
+  const niveles = [...new Set(grupos)].sort((a, b) => a - b);
+  const porGrupo = niveles.map((nv) => valores.filter((_, i) => grupos[i] === nv));
+  const centros = porGrupo.map((v) => {
+    if (centro === 'mediana') {
+      const o = v.slice().sort((a, b) => a - b);
+      const m = Math.floor(o.length / 2);
+      return o.length % 2 ? o[m] : (o[m - 1] + o[m]) / 2;
+    }
+    return v.reduce((a, b) => a + b, 0) / v.length;
+  });
+  // z_ij = |x_ij - centro_i|, después ANOVA sobre z
+  const z = [], g = [];
+  porGrupo.forEach((v, i) => v.forEach((x) => { z.push(Math.abs(x - centros[i])); g.push(i); }));
+  const N = z.length, k = niveles.length;
+  const zBar = z.reduce((a, b) => a + b, 0) / N;
+  const zGrupo = niveles.map((_, i) => {
+    const s = z.filter((_, j) => g[j] === i);
+    return { n: s.length, media: s.reduce((a, b) => a + b, 0) / s.length };
+  });
+  let ssB = 0, ssW = 0;
+  zGrupo.forEach((gr, i) => { ssB += gr.n * (gr.media - zBar) ** 2; });
+  z.forEach((v, j) => { ssW += (v - zGrupo[g[j]].media) ** 2; });
+  const W = (ssB / (k - 1)) / (ssW / (N - k));
+  return {
+    W, df1: k - 1, df2: N - k, p: pF(W, k - 1, N - k), centro,
+    grupos: niveles.map((nv, i) => ({
+      nivel: nv, n: porGrupo[i].length,
+      media: porGrupo[i].reduce((a, b) => a + b, 0) / porGrupo[i].length,
+      sd: Math.sqrt(porGrupo[i].reduce((a, b, _, arr) =>
+        a + (b - arr.reduce((x, y) => x + y, 0) / arr.length) ** 2, 0) / (porGrupo[i].length - 1)),
+    })),
+  };
+}
+
+/** Comparaciones por pares entre niveles de un factor, con corrección de Bonferroni. */
+export function comparacionesPares(fit, indices, nombres) {
+  const pares = [];
+  const m = indices.length;
+  // se compara cada nivel contra cada otro (incluida la base, que es el coeficiente solo)
+  const conBase = [{ idx: null, nombre: nombres.base }].concat(indices.map((j, k) => ({ idx: j, nombre: nombres.niveles[k] })));
+  for (let a = 0; a < conBase.length; a++) {
+    for (let b = a + 1; b < conBase.length; b++) {
+      const R = new Array(fit.b.length).fill(0);
+      if (conBase[b].idx !== null) R[conBase[b].idx] = 1;
+      if (conBase[a].idx !== null) R[conBase[a].idx] = -1;
+      const est = R.reduce((s, v, j) => s + v * fit.b[j], 0);
+      let varz = 0;
+      for (let i = 0; i < R.length; i++) for (let j = 0; j < R.length; j++) varz += R[i] * fit.V[i][j] * R[j];
+      const se = Math.sqrt(Math.max(0, varz));
+      const t = est / se;
+      const pCrudo = fit.statName === 't' ? pT(t, fit.df_r) : pZ(t);
+      pares.push({ a: conBase[a].nombre, b: conBase[b].nombre, dif: est, se, t, pCrudo });
+    }
+  }
+  const nComp = pares.length;
+  for (const p of pares) p.p = Math.min(1, p.pCrudo * nComp);   // Bonferroni
+  void m;
+  return { pares, nComparaciones: nComp, correccion: 'bonferroni' };
+}
+
+/**
+ * Prueba de Hausman-McFadden del supuesto IIA para mlogit.
+ * Se reestima el modelo quitando una categoría y se comparan los coeficientes
+ * que quedan: si IIA se cumple, no deberían cambiar de forma sistemática.
+ */
+export function hausmanIIA(X, y, opts = {}) {
+  const { names, base } = opts;
+  const completo = mlogitFit(X, y, { names, base });
+  const niveles = completo.niveles;
+  const resultados = [];
+
+  for (const omitida of niveles) {
+    if (omitida === completo.base) continue;
+    const filas = [];
+    for (let i = 0; i < y.length; i++) if (y[i] !== omitida) filas.push(i);
+    const Xr = filas.map((i) => X[i]);
+    const yr = filas.map((i) => y[i]);
+    let restringido;
+    try {
+      restringido = mlogitFit(Xr, yr, { names, base: completo.base });
+    } catch { continue; }
+
+    // se comparan las ecuaciones que sobreviven en los dos modelos
+    const idxC = [], idxR = [];
+    completo.eqs.forEach((eq, e) => {
+      if (eq.nivel === omitida) return;
+      const eqR = restringido.eqs.find((x) => x.nivel === eq.nivel);
+      if (!eqR) return;
+      eq.names.forEach((nm, j) => {
+        idxC.push(e * eq.names.length + j);
+        const eR = restringido.eqs.indexOf(eqR);
+        idxR.push(eR * eqR.names.length + j);
+      });
+    });
+    if (!idxC.length) continue;
+
+    const bC = idxC.map((j) => completo.b[j]);
+    const bR = idxR.map((j) => restringido.b[j]);
+    const dif = bR.map((v, i) => v - bC[i]);
+    const Vd = idxR.map((a, i) => idxR.map((b2, j) =>
+      restringido.V[a][b2] - completo.V[idxC[i]][idxC[j]]));
+    let inv;
+    try { inv = inverse(Vd); } catch { continue; }
+    let chi2 = 0;
+    for (let i = 0; i < dif.length; i++) for (let j = 0; j < dif.length; j++) chi2 += dif[i] * inv[i][j] * dif[j];
+    const df = dif.length;
+    resultados.push({
+      omitida, chi2, df,
+      p: chi2 > 0 ? pChi2(chi2, df) : 1,
+      negativo: chi2 < 0,
+    });
+  }
+  return { filas: resultados, base: completo.base, niveles };
+}
+
+/**
+ * Prueba de si dos categorías de un mlogit se pueden fusionar
+ * (todos los coeficientes de esa ecuación, salvo la constante, iguales a cero).
+ */
+export function combinarCategorias(fit) {
+  const salida = [];
+  const k = fit.eqs[0] ? fit.eqs[0].names.length : 0;
+  const idxConst = fit.eqs[0] ? fit.eqs[0].names.indexOf('_cons') : -1;
+  fit.eqs.forEach((eq, e) => {
+    const R = [];
+    eq.names.forEach((nm, j) => {
+      if (j === idxConst) return;
+      const fila = new Array(fit.b.length).fill(0);
+      fila[e * k + j] = 1;
+      R.push(fila);
+    });
+    if (!R.length) return;
+    const r = testLineal(fit, R, R.map(() => 0));
+    salida.push({ a: eq.nivel, b: fit.base, chi2: r.chi2 !== undefined ? r.chi2 : r.F * r.df1, df: r.df || r.df1, p: r.p });
+  });
+  return salida;
+}
+
+/** Efectos marginales de un mlogit sobre UNA categoría concreta. */
+export function marginsMlogit(fit, categoria, opts = {}) {
+  const { level = 95 } = opts;
+  const X = fit.X, k = fit.k;
+  const N = X.length;
+  const otros = fit.eqs.map((e) => e.nivel);
+  const orden = [fit.base, ...otros];
+  const jCat = orden.indexOf(categoria);
+  if (jCat < 0) throw new Error(`la categoría ${categoria} no existe en el modelo`);
+
+  const nombres = fit.xnames;
+  const idxConst = nombres.indexOf('_cons');
+
+  function probs(theta, fila) {
+    const eta = [0];
+    for (let m = 0; m < otros.length; m++) {
+      let s = 0;
+      for (let j = 0; j < k; j++) s += fila[j] * theta[m * k + j];
+      eta.push(s);
+    }
+    const mx = Math.max(...eta);
+    const ex = eta.map((v) => Math.exp(v - mx));
+    const den = ex.reduce((a, b) => a + b, 0);
+    return ex.map((v) => v / den);
+  }
+
+  function ame(theta) {
+    const out = new Array(k).fill(0);
+    for (const fila of X) {
+      const P = probs(theta, fila);
+      for (let j = 0; j < k; j++) {
+        if (j === idxConst) continue;
+        // dP_c/dx_j = P_c * (beta_cj - sum_m P_m beta_mj)
+        let prom = 0;
+        for (let m = 0; m < orden.length; m++) {
+          const bmj = m === 0 ? 0 : theta[(m - 1) * k + j];
+          prom += P[m] * bmj;
+        }
+        const bcj = jCat === 0 ? 0 : theta[(jCat - 1) * k + j];
+        out[j] += P[jCat] * (bcj - prom);
+      }
+    }
+    return out.map((v) => v / N);
+  }
+
+  const theta = fit.b.slice();
+  const est = ame(theta);
+  const J = zeros(k, theta.length);
+  for (let j = 0; j < theta.length; j++) {
+    const h = 1e-5 * Math.max(1, Math.abs(theta[j]));
+    const tp = theta.slice(); tp[j] += h;
+    const tm = theta.slice(); tm[j] -= h;
+    const ap = ame(tp), am = ame(tm);
+    for (let a = 0; a < k; a++) J[a][j] = (ap[a] - am[a]) / (2 * h);
+  }
+  const JV = matmul(J, fit.V);
+  const VV = matmul(JV, transpose(J));
+
+  const salidaN = [], dydx = [], se = [], stat = [], p = [], ci = [];
+  const crit = -normalInv((1 - level / 100) / 2);
+  for (let j = 0; j < k; j++) {
+    if (j === idxConst) continue;
+    salidaN.push(nombres[j]);
+    const e = est[j], s = Math.sqrt(Math.max(0, VV[j][j]));
+    dydx.push(e); se.push(s);
+    const z = s > 0 ? e / s : NaN;
+    stat.push(z); p.push(isNaN(z) ? NaN : pZ(z));
+    ci.push([e - crit * s, e + crit * s]);
+  }
+  return { names: salidaN, dydx, se, stat, p, ci, statName: 'z', level, N, categoria };
+}
+
+/** Probabilidades / efectos predichos en valores concretos de una variable. */
+export function marginsEn(fit, variable, valores, opts = {}) {
+  const { level = 95, derivada = false } = opts;
+  const nombres = fit.xnames || fit.names;
+  const keep = fit.keep || nombres.map((_, j) => j);
+  const nombresK = keep.map((j) => nombres[j]);
+  const jVar = nombresK.indexOf(variable);
+  if (jVar < 0) throw new Error(`${variable} no está en el modelo`);
+  const Xk = fit.X[0].length === keep.length ? fit.X : fit.X.map((f) => keep.map((j) => f[j]));
+  const bk = keep.map((j) => fit.b[j]);
+  const N = Xk.length;
+
+  function calcular(b, valor) {
+    let s = 0;
+    for (const fila of Xk) {
+      const f = fila.slice();
+      f[jVar] = valor;
+      let xb = 0;
+      for (let j = 0; j < f.length; j++) xb += f[j] * b[j];
+      s += derivada ? derivadaEnlace(fit.link, xb) * b[jVar] : prediccionEnlace(fit.link, xb);
+    }
+    return s / N;
+  }
+
+  const crit = -normalInv((1 - level / 100) / 2);
+  const Vk = keep.map((a) => keep.map((b2) => fit.V[a][b2]));
+  return valores.map((v) => {
+    const est = calcular(bk, v);
+    const grad = bk.map((_, j) => {
+      const h = 1e-5 * Math.max(1, Math.abs(bk[j]));
+      const bp = bk.slice(); bp[j] += h;
+      const bm = bk.slice(); bm[j] -= h;
+      return (calcular(bp, v) - calcular(bm, v)) / (2 * h);
+    });
+    let varz = 0;
+    for (let i = 0; i < grad.length; i++) for (let j = 0; j < grad.length; j++) varz += grad[i] * Vk[i][j] * grad[j];
+    const se = Math.sqrt(Math.max(0, varz));
+    return { valor: v, est, se, z: se > 0 ? est / se : NaN, p: se > 0 ? pZ(est / se) : NaN, ci: [est - crit * se, est + crit * se] };
+  });
+}
+
+/** Medias ajustadas por nivel de un factor (margins nombreFactor). */
+export function mediasAjustadas(fit, columnasFactor, etiquetas, opts = {}) {
+  const { level = 95 } = opts;
+  const keep = fit.keep || fit.names.map((_, j) => j);
+  const nombresK = keep.map((j) => fit.names[j]);
+  const Xk = fit.X[0].length === keep.length ? fit.X : fit.X.map((f) => keep.map((j) => f[j]));
+  const bk = keep.map((j) => fit.b[j]);
+  const Vk = keep.map((a) => keep.map((b2) => fit.V[a][b2]));
+  const N = Xk.length;
+  const cols = columnasFactor.map((j) => keep.indexOf(j)).filter((j) => j >= 0);
+  const crit = -normalInv((1 - level / 100) / 2);
+
+  // un escenario por nivel: base (todas las indicadoras en 0) y luego cada una en 1
+  const escenarios = [{ etiqueta: etiquetas[0], poner: -1 }]
+    .concat(cols.map((c, k) => ({ etiqueta: etiquetas[k + 1], poner: c })));
+
+  return escenarios.map((esc) => {
+    const calc = (b) => {
+      let s = 0;
+      for (const fila of Xk) {
+        const f = fila.slice();
+        for (const c of cols) f[c] = 0;
+        if (esc.poner >= 0) f[esc.poner] = 1;
+        let xb = 0;
+        for (let j = 0; j < f.length; j++) xb += f[j] * b[j];
+        s += prediccionEnlace(fit.link, xb);
+      }
+      return s / N;
+    };
+    const est = calc(bk);
+    const grad = bk.map((_, j) => {
+      const h = 1e-5 * Math.max(1, Math.abs(bk[j]));
+      const bp = bk.slice(); bp[j] += h;
+      const bm = bk.slice(); bm[j] -= h;
+      return (calc(bp) - calc(bm)) / (2 * h);
+    });
+    let varz = 0;
+    for (let i = 0; i < grad.length; i++) for (let j = 0; j < grad.length; j++) varz += grad[i] * Vk[i][j] * grad[j];
+    const se = Math.sqrt(Math.max(0, varz));
+    return { etiqueta: esc.etiqueta, est, se, ci: [est - crit * se, est + crit * se] };
+  });
+}
+
+/** Combinación NO lineal de coeficientes por método delta (nlcom). */
+export function nlcom(fit, fn, { level = 95 } = {}) {
+  const b = fit.b.slice();
+  const est = fn(b);
+  if (!isFinite(est)) throw new Error('la expresión no se puede calcular con estos coeficientes');
+  const grad = b.map((_, j) => {
+    const h = 1e-6 * Math.max(1, Math.abs(b[j]));
+    const bp = b.slice(); bp[j] += h;
+    const bm = b.slice(); bm[j] -= h;
+    return (fn(bp) - fn(bm)) / (2 * h);
+  });
+  let varz = 0;
+  for (let i = 0; i < grad.length; i++) for (let j = 0; j < grad.length; j++) varz += grad[i] * fit.V[i][j] * grad[j];
+  const se = Math.sqrt(Math.max(0, varz));
+  const crit = fit.statName === 't' ? -tInv((1 - level / 100) / 2, fit.df_r) : -normalInv((1 - level / 100) / 2);
+  const stat = se > 0 ? est / se : NaN;
+  return {
+    est, se, stat, statName: fit.statName,
+    p: se > 0 ? (fit.statName === 't' ? pT(stat, fit.df_r) : pZ(stat)) : NaN,
+    ci: [est - crit * se, est + crit * se], level,
+  };
+}
+
 /** Prueba de Wald sobre restricciones lineales R b = q. */
 export function testLineal(fit, R, q) {
   const k = fit.b.length;

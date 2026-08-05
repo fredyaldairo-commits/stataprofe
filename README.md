@@ -30,15 +30,37 @@ heterocedasticidad, forma funcional, normalidad) · logaritmos y elasticidades �
 Cobb-Douglas · ANOVA y variables indicadoras · modelos de sí/no (MPL, logit, probit,
 márgenes, razón de momios, clasificación, ROC) · multinomial y ordenado · proyecto final.
 
+## La ventana
+
+Reproduce la disposición de Stata: barra de menús, **ventana de revisión** a la izquierda
+(historial de comandos, en rojo los que fallaron; un clic los recupera, doble clic los
+vuelve a correr), **panel de variables** a la derecha (un clic pega el nombre en la línea
+de comando), la caja **Comando** abajo y la barra de estado. Los menús **Gráficos** y
+**Estadísticas** arman el comando por ti y lo dejan escrito en la caja, para que veas la
+sintaxis en vez de esconderla. En tablet los paneles se recogen solos.
+
 ## Comandos que entiende
 
-`use` `describe` `codebook` `list` `count` `generate` `egen` `replace` `recode` `drop`
-`keep` `rename` `order` `sort` `label` `encode` `decode` `destring` `tostring`
-`duplicates` `misstable` `mvdecode` `assert` `summarize` `tabulate` `tabstat` `table`
-`correlate` `pwcorr` `ttest` `prtest` `oneway` `histogram` `scatter` `twoway` `graph`
-`kdensity` `regress` `anova` `logit` `logistic` `probit` `mlogit` `mprobit` `ologit`
-`oprobit` `poisson` `predict` `margins` `test` `testparm` `lincom` `linktest` `estat`
-`lroc` `lsens` `rvfplot` `qnorm` `estimates` `help` / `ayuda`
+**Datos** — `use` `describe` `codebook` `list` `count` `generate` `egen` `replace`
+`recode` `drop` `keep` `rename` `order` `sort` `gsort` `label` `notes` `encode` `decode`
+`destring` `tostring` `duplicates` `misstable` `mvdecode` `mvencode` `assert` `preserve`
+`restore`
+
+**Descriptiva** — `summarize` `tabulate` `tab1` `tab2` `tabstat` `table` `correlate`
+`pwcorr` `ttest` `prtest` `oneway` `robvar` `swilk` `sktest` `inspect`
+
+**Modelos** — `regress` `anova` `logit` `logistic` `probit` `mlogit` `mprobit` `ologit`
+`oprobit` `poisson`
+
+**Después del modelo** — `predict` `margins` (con `dydx()`, `at()`, `atmeans`, `post`,
+`predict(outcome())` y medias ajustadas por factor) `test` (incluye `[2]educ`) `testparm`
+`lincom` `nlcom` `pwcompare` `mlogtest` `linktest` `estat` (`vif` `hettest` `imtest,white`
+`ovtest` `classification` `gof` `summarize`) `estimates` `esttab`
+
+**Gráficos** — `histogram` `scatter` `twoway` `graph box` `graph bar` `kdensity`
+`rvfplot` `qnorm` `lroc` `lsens` `marginsplot`
+
+**Notación de factores** — `i.var` `ib3.var` `c.var` `a#b` `a##b`
 
 ## Bases incluidas
 
@@ -78,12 +100,14 @@ Y abre `http://localhost:3000`.
 ## Pruebas
 
 ```bash
-node test/t_math.mjs && node test/t_models.mjs && node test/t_datasets.mjs && node test/t_motor.mjs
+node test/t_math.mjs && node test/t_models.mjs && node test/t_datasets.mjs && node test/t_motor.mjs && node test/t_taller.mjs
 ```
 
-Verifican el álgebra lineal y las distribuciones contra valores conocidos, la recuperación
-de parámetros de cada estimador sobre datos simulados, la calibración de las bases, y el
-comportamiento de los comandos de punta a punta (incluida la corrección de errores).
+447 comprobaciones. Verifican el álgebra lineal y las distribuciones contra valores
+conocidos, la recuperación de parámetros de cada estimador sobre datos simulados, la
+calibración de las bases, el comportamiento de los comandos de punta a punta (incluida la
+corrección de errores), y que los bloques de código de los dos documentos de econometría
+que acompañan al proyecto corran completos y sin errores.
 
 ## Cómo está armado
 

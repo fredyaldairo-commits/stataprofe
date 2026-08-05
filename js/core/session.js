@@ -124,6 +124,23 @@ export class Sesion {
       return { tipo: 'cont', nombre, cols: [{ nombre, valores: col.slice(), esFactor: false }] };
     };
 
+    // a##b es atajo de "a b a#b" (factorial completo). Se expande antes de nada.
+    const expandidos = [];
+    for (const t of terminos) {
+      if (t.includes('##')) {
+        const partes = t.split('##').map((s) => s.trim()).filter(Boolean);
+        // todos los subconjuntos no vacíos, en orden de tamaño
+        const combos = [];
+        for (let mask = 1; mask < (1 << partes.length); mask++) {
+          const grupo = partes.filter((_, k) => mask & (1 << k));
+          combos.push({ n: grupo.length, txt: grupo.join('#') });
+        }
+        combos.sort((a, b) => a.n - b.n);
+        for (const c of combos) if (!expandidos.includes(c.txt)) expandidos.push(c.txt);
+      } else expandidos.push(t);
+    }
+    terminos = expandidos;
+
     for (const t of terminos) {
       if (t.includes('#')) {
         const partes = t.split('#').map((s) => s.trim());

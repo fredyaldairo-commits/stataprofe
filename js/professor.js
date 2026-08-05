@@ -591,6 +591,85 @@ export function interpretarPrueba(tipo, r, ctx = {}) {
     }
   }
 
+  if (tipo === 'normalidad') {
+    titulo = `Normalidad (${r.prueba})`;
+    const rechaza = r.p < 0.05;
+    resumen = rechaza
+      ? `Se rechaza la normalidad (valor p ${pTxt(r.p)}).`
+      : `No se rechaza la normalidad (valor p ${pTxt(r.p)}).`;
+    items.push({ tono: 'info', texto: 'Aquí la hipótesis nula es "los datos <strong>sí</strong> son normales". Un valor p bajo significa que <u>no</u> lo son.' });
+    if (rechaza && r.N > 200) {
+      items.push({ tono: 'ok', texto: `<strong>No te preocupes.</strong> Con ${r.N} observaciones, esta prueba rechaza casi siempre: detecta desviaciones minúsculas que no tienen ninguna importancia práctica. Lo que hace confiables a tus valores p en muestras grandes es <strong>tener muchas observaciones</strong>, no que los residuos sean perfectamente normales.` });
+      items.push({ tono: 'info', texto: 'Qué hacer: reportarlo, mirar el gráfico <code>qnorm</code> para ver si la desviación es grave, y seguir. Si la variable es de dinero y está muy sesgada, pasar a logaritmos suele arreglarlo de paso.' });
+    } else if (rechaza) {
+      items.push({ tono: 'ojo', texto: `Con solo ${r.N} observaciones esto sí importa más: en muestras chicas los valores p dependen de que los residuos sean aproximadamente normales. Mira <code>qnorm</code> y considera trabajar en logaritmos.` });
+    } else {
+      items.push({ tono: 'ok', texto: 'Los residuos se comportan como una campana normal. Este supuesto está cubierto.' });
+    }
+    items.push({ tono: 'info', texto: 'De los cuatro supuestos, este es <strong>el menos grave</strong>. La heterocedasticidad y la forma funcional importan mucho más.' });
+  }
+
+  if (tipo === 'levene') {
+    titulo = 'Igualdad de varianzas (Levene)';
+    const rechaza = r.media.p < 0.05;
+    resumen = rechaza
+      ? `Las varianzas <strong>no</strong> son iguales entre grupos (valor p ${pTxt(r.media.p)}).`
+      : `No hay evidencia de que las varianzas difieran entre grupos (valor p ${pTxt(r.media.p)}).`;
+    items.push({ tono: 'info', texto: `Esta prueba no compara promedios sino <strong>dispersiones</strong>: pregunta si <code>${r.variable}</code> varía igual de mucho dentro de cada grupo de <code>${r.grupo}</code>.` });
+    items.push({ tono: 'info', texto: 'Importa porque el ANOVA clásico supone que las varianzas son iguales. Si no lo son, su valor p puede estar mal calculado.' });
+    if (rechaza) {
+      items.push({ tono: 'ojo', texto: 'Qué hacer: en vez del ANOVA clásico, corre la regresión equivalente con <code>robust</code> (<code>reg y i.grupo, robust</code>). Eso corrige el problema sin complicarte.' });
+      items.push({ tono: 'info', texto: `Mira también la línea <strong>W50</strong> (Brown-Forsythe, valor p ${pTxt(r.mediana.p)}): usa la mediana en vez de la media, así que aguanta mejor los valores atípicos. Si las dos coinciden, la conclusión es firme.` });
+    } else {
+      items.push({ tono: 'ok', texto: 'El supuesto del ANOVA se cumple, puedes usar sus resultados con tranquilidad.' });
+    }
+  }
+
+  if (tipo === 'nlcom') {
+    titulo = 'Combinación no lineal de coeficientes';
+    resumen = `El resultado es <strong>${n2(r.est, 4)}</strong> (error estándar ${n2(r.se, 4)}, valor p ${pTxt(r.p)}).`;
+    items.push({ tono: 'info', texto: `Calculaste <code>${r.expresion}</code> a partir de los coeficientes del modelo. Como es una fórmula no lineal, su error estándar se obtiene por el <strong>método delta</strong>: no basta con combinar los errores estándar a mano.` });
+    if (/exp\s*\(/.test(r.expresion) && /-\s*1\s*\)\s*\*\s*100/.test(r.expresion)) {
+      items.push({ tono: 'ok', texto: 'Esta es la <strong>corrección de Halvorsen-Palmquist</strong>: el efecto exacto en porcentaje de una variable 0/1 dentro de un modelo en logaritmos. Es lo correcto cuando el coeficiente pasa de 0,10 en valor absoluto, en vez de multiplicar por 100.' });
+    }
+    if (/\/\s*\(?\s*2\s*\*/.test(r.expresion)) {
+      items.push({ tono: 'ok', texto: 'Este es el <strong>punto de giro</strong> de un término cuadrático: hasta ahí el efecto va en una dirección, y a partir de ahí cambia. Es el número que se reporta cuando metes una variable y su cuadrado.' });
+    }
+    items.push({ tono: r.p < 0.05 ? 'ok' : 'ojo', texto: r.p < 0.05
+      ? 'El intervalo de confianza no incluye el cero: el resultado es estadísticamente distinto de cero.'
+      : 'Ojo: el intervalo de confianza incluye el cero, así que no puedes afirmar que este valor sea distinto de cero.' });
+  }
+
+  if (tipo === 'pwcompare') {
+    titulo = 'Comparaciones por pares';
+    const sig = r.pares.filter((x) => x.p < 0.05);
+    resumen = sig.length
+      ? `De ${r.nComparaciones} comparaciones, <strong>${sig.length}</strong> siguen siendo significativas después de corregir.`
+      : `Ninguna de las ${r.nComparaciones} comparaciones resulta significativa después de corregir.`;
+    items.push({ tono: 'info', texto: `El ANOVA te dice que <u>hay</u> diferencia; esto te dice <u>entre cuáles</u>. Se comparan todos los grupos contra todos: ${r.nComparaciones} comparaciones en total.` });
+    items.push({ tono: 'ojo', texto: `<strong>Por qué se corrige:</strong> al hacer ${r.nComparaciones} pruebas a la vez, la probabilidad de que alguna dé significativa por pura casualidad ya no es 5%, es mucho mayor. Bonferroni lo arregla multiplicando cada valor p por ${r.nComparaciones}.` });
+    if (sig.length) {
+      items.push({ tono: 'ok', texto: `Las diferencias que aguantan la corrección: ${sig.slice(0, 6).map((x) => `<strong>${x.b} vs ${x.a}</strong>`).join(', ')}${sig.length > 6 ? '…' : ''}. Esas son las que puedes afirmar con confianza.` });
+    } else {
+      items.push({ tono: 'info', texto: 'Que ninguna aguante la corrección no significa que no haya diferencias: significa que con esta muestra no se pueden distinguir con seguridad una vez que se toma en cuenta que hiciste muchas pruebas.' });
+    }
+  }
+
+  if (tipo === 'iia') {
+    titulo = 'Supuesto IIA (Hausman-McFadden)';
+    resumen = r.rechaza
+      ? 'Se rechaza el supuesto IIA en alguna categoría.'
+      : 'No se rechaza el supuesto IIA: el modelo multinomial es adecuado.';
+    items.push({ tono: 'info', texto: '<strong>Qué es IIA:</strong> que agregar o quitar una opción no cambie cómo se comparan las demás. El ejemplo clásico: si comparas "bus" y "carro" y agregas "bus azul", el modelo supone que eso no afecta la comparación bus-carro. Pero claro que la afecta, porque bus y bus azul son casi lo mismo.' });
+    items.push({ tono: 'info', texto: 'Cómo funciona la prueba: se vuelve a estimar el modelo <strong>quitando una categoría</strong> y se compara si los demás coeficientes cambiaron. Si IIA se cumple, no deberían cambiar de forma sistemática.' });
+    items.push({ tono: r.rechaza ? 'ojo' : 'ok', texto: r.rechaza
+      ? 'Como se rechaza, tus categorías podrían ser sustitutas cercanas entre sí. Opciones: juntar las que se parecen, o usar <code>nlogit</code> / <code>asmprobit</code>, que no exigen IIA.'
+      : 'Los valores p son altos: los coeficientes no cambian al quitar categorías. Puedes usar el mlogit y <strong>menciónalo en tu trabajo</strong>: probar IIA y reportarlo es de las cosas que más suman.' });
+    if (r.algunNeg) {
+      items.push({ tono: 'info', texto: 'Alguna fila salió con chi-cuadrado negativo. Eso pasa en muestras finitas y <strong>no es un error tuyo</strong>: por convención se interpreta como evidencia a favor de IIA.' });
+    }
+  }
+
   return bloque(titulo, resumen, items);
 }
 

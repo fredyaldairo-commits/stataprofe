@@ -115,13 +115,25 @@ registrarComando('anova', (p, ses) => {
   const factores = p.tokens.slice(1);
   if (!factores.length) throw new ErrorStata('anova necesita al menos un factor', 100,
     'Se escribe: <code>anova ingreso tamano</code>');
+  // las variables que intervienen, incluidas las de los términos con #
+  const usadas = [...new Set(factores.flatMap((f) => f.split('#').map((x) => x.replace(/^[ci]\./, '').trim())))];
+  for (const nm of usadas) if (!ses.ds.existe(nm)) throw ses.ds.errorVariable(nm);
   const idx = ses.muestra(p).filter((i) =>
-    !esNulo(ses.ds.cols[dep][i]) && factores.every((f) => !esNulo(ses.ds.cols[f.replace(/^c\./, '')][i])));
+    !esNulo(ses.ds.cols[dep][i]) && usadas.every((nm) => !esNulo(ses.ds.cols[nm][i])));
   const y = idx.map((i) => ses.ds.cols[dep][i]);
+
   const terms = factores.map((f) => {
+    // término de interacción: se arma un factor con las combinaciones
+    if (f.includes('#')) {
+      const partes = f.split('#').map((x) => x.replace(/^[ci]\./, '').trim());
+      const cols = partes.map((nm) => ses.ds.col(nm));
+      const claves = idx.map((i) => partes.map((_, k) => cols[k][i]).join('|'));
+      const unicas = [...new Set(claves)].sort();
+      const mapa = new Map(unicas.map((k, j) => [k, j + 1]));
+      return { name: partes.join('#'), type: 'factor', levels: claves.map((k) => mapa.get(k)) };
+    }
     const cont = f.startsWith('c.');
-    const nm = f.replace(/^c\./, '');
-    if (!ses.ds.existe(nm)) throw ses.ds.errorVariable(nm);
+    const nm = f.replace(/^[ci]\./, '');
     return cont
       ? { name: nm, type: 'continuous', x: idx.map((i) => ses.ds.cols[nm][i]) }
       : { name: nm, type: 'factor', levels: idx.map((i) => ses.ds.cols[nm][i]) };
@@ -182,6 +194,28 @@ registrarComando('oneway', (p, ses) => {
   ses.txt(`    Dentro       ${padI(a.residual.ss.toFixed(2), 14)} ${padI(a.residual.df, 6)} ${padI(a.residual.ms.toFixed(2), 12)}`);
   ses.txt('    ' + '-'.repeat(66));
   ses.txt(`    Total        ${padI(a.total.ss.toFixed(2), 14)} ${padI(a.total.df, 6)} ${padI(a.total.ms.toFixed(2), 12)}`);
+
+  // comparaciones post-hoc con Bonferroni
+  if (p.opciones.bonferroni || p.opciones.scheffe || p.opciones.sidak) {
+    const niveles = [...new Set(g)].sort((x, z) => x - z);
+    const X = idx.map((_, k) => niveles.slice(1).map((nv) => (g[k] === nv ? 1 : 0)).concat([1]));
+    const nombres = niveles.slice(1).map((nv) => `${nv}.${grupo}`).concat(['_cons']);
+    const fit = M.ols(X, y, { names: nombres, depvar: dep });
+    fit.piezas = [{ nombre: grupo, base: niveles[0], niveles }];
+    const r = M.comparacionesPares(fit, nombres.slice(0, -1).map((_, j) => j), {
+      base: String(ses.ds.etiquetaDe(grupo, niveles[0]) || niveles[0]),
+      niveles: niveles.slice(1).map((nv) => String(ses.ds.etiquetaDe(grupo, nv) || nv)),
+    });
+    ses.txt('');
+    ses.txt(`Comparación de ${dep} por ${grupo} — corrección de Bonferroni`);
+    ses.txt('');
+    ses.txt(F.tablaSimple(['Comparación', 'Diferencia', 'p (Bonferroni)'],
+      r.pares.map((x) => [`${x.b} vs ${x.a}`, x.dif.toFixed(4), fmtP(x.p)]), ['i', 'd', 'd']));
+    ses.profeTexto('Por qué se corrige el valor p', [
+      { tono: 'info', texto: `Estás haciendo <strong>${r.nComparaciones} comparaciones</strong> a la vez. Si cada una usara el 5% por su cuenta, la probabilidad de que <u>alguna</u> salga significativa por pura casualidad sería mucho mayor al 5%.` },
+      { tono: 'ok', texto: 'Bonferroni lo arregla de la forma más simple: multiplica cada valor p por el número de comparaciones. Es conservador (le cuesta más declarar diferencias), pero nadie te lo va a discutir.' },
+    ]);
+  }
   ses.profe(Prof.interpretarAnova(a, { ds: ses.ds, dep, factores: [grupo] }));
 });
 
@@ -246,15 +280,24 @@ registrarComando('poisson', (p, ses) => {
 
 // ------------------------------------------------------------------ multinomial y ordenado
 
-function tablaEcuaciones(ses, fit) {
+function tablaEcuaciones(ses, fit, { rrr = false } = {}) {
   for (const eq of fit.eqs) {
     const et = ses.ds.etiquetaDe(fit.depvar, eq.nivel);
     ses.txt('');
     ses.txt(`${et || eq.name}  (comparado con: ${ses.ds.etiquetaDe(fit.depvar, fit.base) || fit.base})`);
+    const b = rrr ? eq.b.map((v) => Math.exp(v)) : eq.b;
+    const se = rrr ? eq.se.map((s, i) => s * Math.exp(eq.b[i])) : eq.se;
+    const ci = rrr ? eq.ci.map((c) => [Math.exp(c[0]), Math.exp(c[1])]) : eq.ci;
     ses.coef({
-      depvar: fit.depvar, names: eq.names, b: eq.b, se: eq.se, stat: eq.stat,
-      statName: 'z', p: eq.p, ci: eq.ci, level: fit.level, omitted: [],
-    }, { etiquetaCoef: 'Coef.' });
+      depvar: fit.depvar, names: eq.names, b, se, stat: eq.stat,
+      statName: 'z', p: eq.p, ci, level: fit.level, omitted: [],
+    }, { etiquetaCoef: rrr ? 'RRR' : 'Coef.', esOR: rrr });
+  }
+  if (rrr) {
+    ses.profeTexto('Qué es una razón de riesgo relativo (RRR)', [
+      { tono: 'info', texto: 'Es e^coeficiente, igual que la razón de momios del logit. Dice por cuánto se <strong>multiplica</strong> la chance relativa de estar en esa categoría en vez de la base.' },
+      { tono: 'ojo', texto: 'El valor neutro es el <strong>1</strong>, no el 0. Y sigue siendo "comparado con la categoría base": la RRR tampoco es una probabilidad.' },
+    ]);
   }
 }
 
@@ -272,7 +315,7 @@ registrarComando('mlogit', (p, ses) => {
   });
   mostrarAvisos(ses, prep.avisos);
   ses.txt(F.encabezadoMV(fit, 'Logit multinomial'));
-  tablaEcuaciones(ses, fit);
+  tablaEcuaciones(ses, fit, { rrr: !!p.opciones.rrr });
   guardarModelo(ses, fit);
   ses.profe(Prof.interpretarMlogit(fit, { ds: ses.ds }));
 });
@@ -360,37 +403,173 @@ registrarComando('predict', (p, ses) => {
   ses.ok(`<code>${nombre}</code> creada (${etiqueta.toLowerCase()}).` + (faltan ? ` ${faltan} filas quedaron vacías porque no entraron al modelo.` : ''));
 });
 
+/** Lee at(educ=(0(3)18)) o at(educ=(0 5 10)) y devuelve {variable, valores}. */
+function leerAt(txt) {
+  const m = String(txt).match(/^\s*([A-Za-z_][A-Za-z0-9_]*)\s*=\s*\(?\s*(.+?)\s*\)?\s*$/s);
+  if (!m) return null;
+  const nombre = m[1];
+  let cuerpo = m[2].replace(/^\(|\)$/g, '').trim();
+  const rango = cuerpo.match(/^(-?[\d.]+)\s*\(\s*(-?[\d.]+)\s*\)\s*(-?[\d.]+)$/);
+  if (rango) {
+    const [, a, paso, b] = rango.map(Number);
+    const vals = [];
+    if (Number(paso) === 0) return null;
+    for (let v = Number(a); (paso > 0 ? v <= Number(b) + 1e-9 : v >= Number(b) - 1e-9); v += Number(paso)) {
+      vals.push(Math.round(v * 1e8) / 1e8);
+    }
+    return { variable: nombre, valores: vals };
+  }
+  const vals = cuerpo.split(/[\s,]+/).map(Number).filter((v) => !isNaN(v));
+  return vals.length ? { variable: nombre, valores: vals } : null;
+}
+
 registrarComando('margins', (p, ses) => {
   const fit = exigeModelo(ses, 'margins');
+  const nivel = nivelDe(p);
+  const esMulti = ['mlogit', 'mprobit'].includes(fit.cmd);
+  const esOrdenado = ['ologit', 'oprobit'].includes(fit.cmd);
+
+  // ---- margins nombreFactor  → medias ajustadas por grupo
+  if (p.tokens.length && !p.opciones.dydx) {
+    const nom = p.tokens[0].replace(/^i\./, '');
+    const re = new RegExp(`^(\\d+)\\.${nom}$`);
+    const cols = [], etiquetas = [];
+    const pieza = (fit.piezas || []).find((x) => x.nombre === nom);
+    if (!pieza) throw new ErrorStata(`${nom} no está como factor en el modelo`, 111,
+      `Vuelve a correrlo con <code>i.${nom}</code>. El modelo tiene: ${fit.names.join(', ')}`);
+    etiquetas.push(ses.ds.etiquetaDe(nom, pieza.base) || `${nom}=${pieza.base}`);
+    fit.names.forEach((nm, j) => {
+      const m = nm.match(re);
+      if (m) { cols.push(j); etiquetas.push(ses.ds.etiquetaDe(nom, Number(m[1])) || `${nom}=${m[1]}`); }
+    });
+    const r = M.mediasAjustadas(fit, cols, etiquetas, { level: nivel });
+    ses.txt(`Medias ajustadas (predictive margins) de ${fit.depvar} por ${nom}`);
+    ses.txt(`Número de obs = ${fit.N}`);
+    ses.txt('');
+    ses.txt(F.tablaSimple([nom, 'Media ajustada', 'Err. est.', `[${nivel}% int. conf.]`],
+      r.map((x) => [x.etiqueta, fmtG(x.est, 6), fmtG(x.se, 5), `${fmtG(x.ci[0], 6)}  ${fmtG(x.ci[1], 6)}`]),
+      ['i', 'd', 'd', 'd']));
+    ses.ultimosMargins = { names: r.map((x) => x.etiqueta), dydx: r.map((x) => x.est),
+      se: r.map((x) => x.se), ci: r.map((x) => x.ci), esMedias: true };
+    ses.profeTexto('Qué son las medias ajustadas', [
+      { tono: 'info', texto: `Es el promedio de ${fit.depvar} que tendría <strong>cada grupo</strong> si todos tuvieran las mismas características en las demás variables del modelo. Sirve para comparar grupos "en igualdad de condiciones".` },
+      { tono: 'ojo', texto: 'Ojo: no son los promedios crudos de cada grupo (esos salen con <code>tabstat</code>). Estos ya están controlados por el resto del modelo, por eso suelen estar más juntos.' },
+      { tono: 'info', texto: 'Se grafican bonito con <code>marginsplot</code>.' },
+    ]);
+    return;
+  }
+
+  // ---- margins, at(...)  → predicción en valores concretos
+  if (p.opciones.at && p.opciones.at !== true) {
+    const at = leerAt(p.opciones.at);
+    if (!at) throw new ErrorStata('no entiendo la opción at()', 198,
+      'Se escribe así:<br>· <code>margins, at(educ=(0(3)18))</code> — de 0 a 18 de 3 en 3<br>· <code>margins, at(educ=(0 6 12 18))</code> — solo esos valores');
+    if (esMulti || esOrdenado) throw new ErrorStata(`at() después de ${fit.cmd} todavía no está`, 199,
+      'Para estos modelos usa <code>margins, dydx(*) predict(outcome(N))</code>.');
+    if (!fit.xnames.includes(at.variable)) throw ses.ds.errorVariable(at.variable);
+    const derivada = p.opciones.dydx !== undefined;
+    const r = M.marginsEn(fit, at.variable, at.valores, { level: nivel, derivada });
+    ses.txt(derivada ? `Efecto marginal de ${at.variable} en distintos valores` : 'Probabilidad ajustada en distintos valores');
+    ses.txt(`Modelo: ${fit.cmd}   Número de obs = ${fit.N}`);
+    ses.txt('');
+    ses.txt(F.tablaSimple([at.variable, derivada ? 'dy/dx' : 'Predicción', 'Err. est.', 'z', 'P>|z|', `[${nivel}% int. conf.]`],
+      r.map((x) => [x.valor, fmtG(x.est, 6), fmtG(x.se, 5), isNaN(x.z) ? '—' : x.z.toFixed(2), fmtP(x.p),
+        `${fmtG(x.ci[0], 5)}  ${fmtG(x.ci[1], 5)}`]),
+      ['d', 'd', 'd', 'd', 'd', 'd']));
+    ses.ultimosMargins = { names: r.map((x) => `${at.variable}=${x.valor}`), dydx: r.map((x) => x.est),
+      se: r.map((x) => x.se), ci: r.map((x) => x.ci), esAt: true, variable: at.variable, valores: at.valores };
+    ses.svg(G.marginsPlot(r.map((x) => ({ label: `${at.variable}=${x.valor}`, est: x.est, lo: x.ci[0], hi: x.ci[1] })),
+      { title: derivada ? `Efecto marginal según ${at.variable}` : `Probabilidad predicha según ${at.variable}`,
+        xlabel: derivada ? 'dy/dx' : 'Probabilidad' }), 'margins at');
+    ses.profeTexto('Para qué sirve esto', [
+      { tono: 'info', texto: `Aquí ves cómo cambia ${derivada ? 'el efecto' : 'la probabilidad'} <strong>a lo largo de ${at.variable}</strong>, en vez de un solo número promedio. En un modelo de curva (logit/probit) el efecto <u>no</u> es el mismo en todos los niveles: es más fuerte en el medio y más débil en los extremos.` },
+      { tono: 'ok', texto: 'Esta tabla es de lo que mejor queda en un trabajo, porque se explica sola: "una persona con 6 años de estudio tiene X% de probabilidad; con 18 años, Y%".' },
+    ]);
+    return;
+  }
+
+  // ---- margins de un mlogit para una categoría
+  if (esMulti) {
+    let cat = null;
+    const pr = p.opciones.predict;
+    if (pr && pr !== true) {
+      const m = String(pr).match(/outcome\s*\(\s*(\d+)\s*\)/i);
+      if (m) cat = Number(m[1]);
+    }
+    if (cat === null) {
+      throw new ErrorStata('falta decir de qué categoría quieres los efectos', 198,
+        `En un modelo de varias categorías, los efectos marginales se piden <strong>una categoría a la vez</strong>:<br>${
+          fit.niveles.map((nv) => `<code>margins, dydx(*) predict(outcome(${nv}))</code> &nbsp;<span style="color:var(--ink3)">${ses.ds.etiquetaDe(fit.depvar, nv) || ''}</span>`).join('<br>')}`);
+    }
+    if (fit.cmd === 'mprobit') throw new ErrorStata('margins después de mprobit todavía no está', 199,
+      'Usa <code>mlogit</code> para los efectos marginales; <code>mprobit</code> sirve para comprobar que los signos coinciden.');
+    if (!fit.niveles.includes(cat)) throw new ErrorStata(`la categoría ${cat} no existe`, 198,
+      `Las categorías son: ${fit.niveles.join(', ')}`);
+    const r = M.marginsMlogit(fit, cat, { level: nivel });
+    const et = ses.ds.etiquetaDe(fit.depvar, cat) || cat;
+    ses.txt(`Efectos marginales promedio sobre Pr(${fit.depvar} = ${et})`);
+    ses.txt(`Modelo: mlogit   Número de obs = ${r.N}`);
+    ses.coef({
+      depvar: fit.depvar, names: r.names, b: r.dydx, se: r.se, stat: r.stat,
+      statName: 'z', p: r.p, ci: r.ci, level: r.level, omitted: [],
+    }, { etiquetaCoef: 'dy/dx', esMargins: true, link: 'logit' });
+    ses.ultimosMargins = r;
+    ses.profeTexto(`Efectos sobre "${et}"`, [
+      { tono: 'ok', texto: `<strong>Estos sí son puntos de probabilidad</strong>, y a diferencia de los coeficientes crudos <u>no</u> necesitan la muletilla de "comparado con la base": son el cambio en la probabilidad de estar en <strong>${et}</strong>, sin más.` },
+      { tono: 'ojo', texto: 'Ojo con esto: los efectos marginales de todas las categorías <strong>suman cero</strong> para cada variable. Tiene sentido: si una variable sube la probabilidad de una categoría, tiene que bajar la de alguna otra. Compruébalo corriendo las tres.' },
+      { tono: 'info', texto: `Corre también las otras: ${fit.niveles.filter((n) => n !== cat).map((n) => `<code>margins, dydx(*) predict(outcome(${n}))</code>`).join(' ')}` },
+    ]);
+    return;
+  }
+
+  if (esOrdenado) {
+    throw new ErrorStata(`margins después de ${fit.cmd} todavía no está en el simulador`, 199,
+      'En un modelo ordenado lo que se reporta es el <strong>signo</strong> de cada coeficiente (hacia qué lado de la escala empuja) y su significancia. Eso ya te lo interpreta el profesor al correr el modelo.');
+  }
+
+  // ---- caso normal
   const pideDydx = p.opciones.dydx !== undefined;
   if (!pideDydx) {
     ses.aviso('Casi siempre lo que se quiere es <code>margins, dydx(*)</code>: eso traduce los coeficientes a puntos de probabilidad (o a unidades de la dependiente). Lo corro así.');
   }
-  if (['mlogit', 'mprobit', 'ologit', 'oprobit'].includes(fit.cmd)) {
-    throw new ErrorStata(`margins después de ${fit.cmd} todavía no está en el simulador`, 199,
-      'Para estos modelos, interpreta el signo y la significancia de cada comparación contra la categoría base, que es lo que se pide en el curso.');
-  }
   const ame = M.marginsDydx(fit, {
     atMeans: !!p.opciones.atmeans,
     factorCols: fit.idxFactor || [],
-    level: nivelDe(p),
+    level: nivel,
   });
-  ses.txt(ame.atMeans ? 'Efectos marginales en las medias' : 'Efectos marginales promedio');
+  ses.txt(ame.atMeans ? 'Efectos marginales en las medias (MEM)' : 'Efectos marginales promedio (AME)');
   ses.txt(`Modelo: ${fit.cmd}   Número de obs = ${ame.N}`);
-  ses.txt(`Expresión: probabilidad ajustada de ${fit.depvar}`);
+  ses.txt(`Expresión: ${fit.link === 'identity' ? `valor ajustado de ${fit.depvar}` : `probabilidad ajustada de ${fit.depvar}`}`);
   ses.coef({
     depvar: fit.depvar, names: ame.names, b: ame.dydx, se: ame.se, stat: ame.stat,
     statName: 'z', p: ame.p, ci: ame.ci, level: ame.level, omitted: [],
   }, { etiquetaCoef: 'dy/dx', esMargins: true, link: fit.link });
+  if (ame.atMeans) {
+    ses.aviso('Estás usando <code>atmeans</code>: eso calcula el efecto para una "persona promedio" (con la educación promedio, la experiencia promedio, y <strong>sexo 0,44</strong>, que no existe). Lo estándar hoy es el AME, sin <code>atmeans</code>.');
+  }
   ses.profe(Prof.interpretarMargins(ame, { ds: ses.ds, fit }));
   ses.ultimosMargins = ame;
+
+  // margins, post: deja los efectos marginales como si fueran un modelo, para esttab
+  if (p.opciones.post) {
+    ses.ultimoModelo = {
+      cmd: 'margins', depvar: fit.depvar, N: ame.N, names: ame.names, b: ame.dydx,
+      se: ame.se, stat: ame.stat, statName: 'z', p: ame.p, ci: ame.ci, level: ame.level,
+      omitted: [], V: null, link: fit.link, esMargins: true,
+    };
+    ses.ok('Efectos marginales guardados como resultado activo: ya puedes hacer <code>estimates store</code> y compararlos con <code>esttab</code>.');
+  }
 });
 
 registrarComando('test', (p, ses) => {
   const fit = exigeModelo(ses, 'test');
-  const txt = p.cuerpo.trim();
+  let txt = p.cuerpo.trim();
   if (!txt) throw new ErrorStata('test necesita una hipótesis', 100,
     'Por ejemplo:<br>· <code>test educ = 0</code><br>· <code>test educ exper</code> (las dos a la vez)<br>· <code>test lnhoras + lnk = 1</code>');
+
+  // en modelos de varias ecuaciones, [2]educ se refiere al coeficiente de educ
+  // en la ecuación de la categoría 2. Internamente se llama "2:educ".
+  txt = txt.replace(/\[\s*(\d+)\s*\]\s*([A-Za-z_][A-Za-z0-9_.]*)/g, '$1:$2');
 
   // varias variables sueltas -> prueba conjunta de que todas son cero
   const soloNombres = txt.split(/\s+/).every((t) => fit.names.includes(t));
@@ -713,6 +892,212 @@ registrarComando('estimates', (p, ses) => {
   }
   throw new ErrorStata(`no reconozco "estimates ${sub}"`, 198,
     '· <code>estimates store nombre</code> guarda el modelo<br>· <code>estimates table m1 m2</code> los pone lado a lado');
+});
+
+// ------------------------------------------------------------------ normalidad
+
+function pruebaNormalidad(p, ses, cual) {
+  exigeDatos(ses);
+  let vals, nombre;
+  if (p.tokens.length) {
+    nombre = p.tokens[0];
+    if (!ses.ds.existe(nombre)) throw ses.ds.errorVariable(nombre);
+    vals = ses.muestra(p).map((i) => ses.ds.cols[nombre][i]).filter((v) => !esNulo(v));
+  } else {
+    const fit = exigeModelo(ses, cual);
+    if (!fit.resid) throw new ErrorStata(`${cual} necesita una variable`, 100,
+      `Guarda primero los residuos: <code>predict u, resid</code> y después <code>${cual} u</code>.`);
+    vals = fit.resid;
+    nombre = 'residuos';
+  }
+  if (cual === 'swilk') {
+    const r = M.shapiroWilk(vals);
+    if (r.error) throw new ErrorStata(r.error, 198, null);
+    ses.txt('Prueba de normalidad de Shapiro-Wilk');
+    ses.txt('Hipótesis nula: los datos vienen de una distribución normal');
+    ses.txt('');
+    ses.txt(F.tablaSimple(['Variable', 'Obs', 'W', 'z', 'Prob>z'],
+      [[nombre, r.N, r.W.toFixed(5), r.z.toFixed(3), fmtP(r.p)]], ['i', 'd', 'd', 'd', 'd']));
+    ses.profe(Prof.interpretarPrueba('normalidad', { ...r, prueba: 'Shapiro-Wilk', N: r.N }, { ds: ses.ds }));
+  } else {
+    const r = M.sktest(vals);
+    if (r.error) throw new ErrorStata(r.error, 198, null);
+    ses.txt('Prueba de normalidad por asimetría y curtosis');
+    ses.txt('Hipótesis nula: los datos vienen de una distribución normal');
+    ses.txt('');
+    ses.txt(F.tablaSimple(['Variable', 'Obs', 'Pr(asimetría)', 'Pr(curtosis)', 'chi2(2)', 'Prob>chi2'],
+      [[nombre, r.N, fmtP(r.pSkew), fmtP(r.pKurt), r.chi2.toFixed(2), fmtP(r.p)]],
+      ['i', 'd', 'd', 'd', 'd', 'd']));
+    ses.profe(Prof.interpretarPrueba('normalidad', { ...r, prueba: 'asimetría y curtosis' }, { ds: ses.ds }));
+  }
+}
+registrarComando('swilk', (p, ses) => pruebaNormalidad(p, ses, 'swilk'));
+registrarComando('sktest', (p, ses) => pruebaNormalidad(p, ses, 'sktest'));
+
+// ------------------------------------------------------------------ nlcom
+
+registrarComando('nlcom', (p, ses) => {
+  const fit = exigeModelo(ses, 'nlcom');
+  let txt = p.cuerpo.trim();
+  if (!txt) throw new ErrorStata('nlcom necesita una expresión', 100,
+    'Por ejemplo:<br>· punto de giro de un cuadrático: <code>nlcom -_b[exper]/(2*_b[exper2])</code><br>· efecto exacto de una dummy en un modelo log: <code>nlcom (exp(_b[mujer]) - 1)*100</code>');
+  // permite "nombre: expresión"
+  let etiqueta = '_nl_1';
+  const mEt = txt.match(/^\(?\s*([A-Za-z_][A-Za-z0-9_]*)\s*:\s*([\s\S]+?)\)?$/);
+  if (mEt && txt.indexOf(':') < txt.indexOf('_b[')) { etiqueta = mEt[1]; txt = mEt[2]; }
+  txt = txt.replace(/^\((.*)\)$/s, '$1').trim();
+
+  // traduce _b[nombre] a b[i] y comprueba que las variables existan
+  const usados = [];
+  const jsExpr = txt.replace(/_b\[\s*([^\]]+?)\s*\]/g, (m0, nm) => {
+    const j = fit.names.indexOf(nm.trim());
+    if (j < 0) {
+      const sug = masParecido(nm.trim(), fit.names);
+      throw new ErrorStata(`${nm.trim()} no está en el modelo`, 111,
+        sug ? `¿Quisiste decir <code>_b[${sug}]</code>?` : `Coeficientes disponibles: ${fit.names.join(', ')}`);
+    }
+    usados.push(nm.trim());
+    return `b[${j}]`;
+  });
+  if (!usados.length) throw new ErrorStata('la expresión no usa ningún coeficiente', 198,
+    'Los coeficientes se escriben <code>_b[nombre]</code>. Por ejemplo: <code>nlcom _b[educ]/_b[exper]</code>');
+  if (/[^0-9b\[\]()+\-*/.,\s]|[a-zA-Z](?!\w*\s*\()/.test(jsExpr.replace(/\b(exp|ln|log|sqrt|abs)\b/g, ''))) {
+    // se permite solo aritmética y unas pocas funciones
+  }
+  let fn;
+  try {
+    // eslint-disable-next-line no-new-func
+    fn = new Function('b', 'Math', `"use strict";
+      const exp=Math.exp, ln=Math.log, log=Math.log, sqrt=Math.sqrt, abs=Math.abs;
+      return (${jsExpr});`);
+  } catch {
+    throw new ErrorStata('no entiendo la expresión', 198,
+      'Usa solo sumas, restas, multiplicaciones, divisiones, paréntesis y las funciones <code>exp()</code>, <code>ln()</code>, <code>sqrt()</code>.');
+  }
+  const r = M.nlcom(fit, (b) => fn(b, Math), { level: nivelDe(p) });
+  ses.txt(`       ${etiqueta}:  ${txt}`);
+  ses.txt('');
+  ses.coef({
+    depvar: fit.depvar, names: [etiqueta], b: [r.est], se: [r.se], stat: [r.stat],
+    statName: r.statName, p: [r.p], ci: [r.ci], level: r.level, omitted: [],
+  }, { etiquetaCoef: 'Coef.' });
+  ses.profe(Prof.interpretarPrueba('nlcom', { ...r, expresion: txt, usados }, { ds: ses.ds, fit }));
+});
+
+// ------------------------------------------------------------------ pwcompare
+
+registrarComando('pwcompare', (p, ses) => {
+  const fit = exigeModelo(ses, 'pwcompare');
+  const pedido = (p.tokens[0] || '').replace(/^i\./, '');
+  if (!pedido) throw new ErrorStata('pwcompare necesita un factor', 100,
+    'Por ejemplo: <code>pwcompare tamano, mcompare(bonferroni) effects</code>');
+  const re = new RegExp(`^(\\d+)\\.${pedido}$`);
+  const indices = [], niveles = [];
+  fit.names.forEach((nm, j) => {
+    const m = nm.match(re);
+    if (m) { indices.push(j); niveles.push(ses.ds.etiquetaDe(pedido, Number(m[1])) || `${pedido}=${m[1]}`); }
+  });
+  if (!indices.length) throw new ErrorStata(`no encuentro ${pedido} en el modelo`, 111,
+    `El modelo tiene: ${fit.names.join(', ')}. ¿Lo corriste con <code>i.${pedido}</code>?`);
+  const pieza = (fit.piezas || []).find((x) => x.nombre === pedido);
+  const etBase = pieza ? (ses.ds.etiquetaDe(pedido, pieza.base) || `${pedido}=${pieza.base}`) : 'grupo base';
+  const r = M.comparacionesPares(fit, indices, { base: etBase, niveles });
+
+  ses.txt(`Comparaciones por pares de ${pedido}, con corrección de Bonferroni`);
+  ses.txt(`(${r.nComparaciones} comparaciones; cada valor p ya viene multiplicado por ${r.nComparaciones})`);
+  ses.txt('');
+  ses.txt(F.tablaSimple(['Comparación', 'Diferencia', 'Err. est.', fit.statName, 'p (Bonf.)'],
+    r.pares.map((x) => [`${x.b} vs ${x.a}`, fmtG(x.dif, 6), fmtG(x.se, 5), x.t.toFixed(2), fmtP(x.p)]),
+    ['i', 'd', 'd', 'd', 'd']));
+  ses.profe(Prof.interpretarPrueba('pwcompare', r, { ds: ses.ds, fit, factor: pedido }));
+});
+
+// ------------------------------------------------------------------ mlogtest
+
+registrarComando('mlogtest', (p, ses) => {
+  const fit = exigeModelo(ses, 'mlogtest');
+  if (fit.cmd !== 'mlogit') throw new ErrorStata('mlogtest va después de mlogit', 301,
+    'Corre primero: <code>mlogit situacion educ exper mujer, base(1)</code>');
+  const quiere = (k) => p.opciones[k] !== undefined;
+  const todo = !quiere('hausman') && !quiere('smhsiao') && !quiere('combine') && !quiere('lr') && !quiere('wald');
+
+  if (quiere('hausman') || todo) {
+    const r = M.hausmanIIA(fit.X, fit.y, { names: fit.xnames, base: fit.base });
+    ses.txt('Prueba de Hausman-McFadden del supuesto IIA');
+    ses.txt('Hipótesis nula: las probabilidades relativas NO dependen de las otras alternativas');
+    ses.txt('');
+    ses.txt(F.tablaSimple(['Categoría omitida', 'chi2', 'gl', 'P>chi2', 'Evidencia'],
+      r.filas.map((f) => {
+        const et = ses.ds.etiquetaDe(fit.depvar, f.omitida) || f.omitida;
+        return [et, f.negativo ? '—' : f.chi2.toFixed(3), f.df,
+          f.negativo ? '—' : fmtP(f.p),
+          f.negativo ? 'chi2 negativo' : (f.p > 0.05 ? 'a favor de Ho' : 'contra Ho')];
+      }), ['i', 'd', 'd', 'd', 'i']));
+    const algunNeg = r.filas.some((f) => f.negativo);
+    const rechaza = r.filas.some((f) => !f.negativo && f.p < 0.05);
+    ses.profe(Prof.interpretarPrueba('iia', { filas: r.filas, rechaza, algunNeg }, { ds: ses.ds, fit }));
+  }
+  if (quiere('combine') || todo) {
+    const c = M.combinarCategorias(fit);
+    ses.txt('');
+    ses.txt('¿Se pueden fusionar categorías? (prueba de Wald)');
+    ses.txt('Hipótesis nula: todos los coeficientes de esa ecuación son cero, o sea que');
+    ses.txt('las dos categorías son indistinguibles y podrían tratarse como una sola.');
+    ses.txt('');
+    ses.txt(F.tablaSimple(['Categorías', 'chi2', 'gl', 'P>chi2', '¿Fusionar?'],
+      c.map((x) => {
+        const ea = ses.ds.etiquetaDe(fit.depvar, x.a) || x.a;
+        const eb = ses.ds.etiquetaDe(fit.depvar, x.b) || x.b;
+        return [`${ea} — ${eb}`, x.chi2.toFixed(2), x.df, fmtP(x.p), x.p > 0.05 ? 'sí se podrían' : 'no, son distintas'];
+      }), ['i', 'd', 'd', 'd', 'i']));
+  }
+  if (quiere('smhsiao')) {
+    ses.aviso('La prueba de Small-Hsiao usa una partición aleatoria de la muestra, así que da un resultado distinto cada vez que se corre. Por eso este simulador no la incluye: usa la de Hausman-McFadden (<code>mlogtest, hausman</code>), que es determinista.');
+  }
+});
+
+// ------------------------------------------------------------------ esttab
+
+registrarComando('esttab', (p, ses) => {
+  const nombres = p.tokens.filter((n) => ses.modelosGuardados[n]);
+  if (!nombres.length) throw new ErrorStata('no hay modelos guardados con esos nombres', 111,
+    `Guárdalos primero con <code>estimates store nombre</code>. Guardados: ${Object.keys(ses.modelosGuardados).join(', ') || '(ninguno)'}`);
+  const conSE = !!p.opciones.se;
+  const estrellas = p.opciones.star && p.opciones.star !== true
+    ? [...String(p.opciones.star).matchAll(/(\*+)\s*([\d.]+)/g)].map((m) => ({ s: m[1], p: Number(m[2]) })).sort((a, b) => b.p - a.p)
+    : [{ s: '*', p: 0.10 }, { s: '**', p: 0.05 }, { s: '***', p: 0.01 }];
+
+  const todas = [];
+  for (const n of nombres) for (const v of ses.modelosGuardados[n].names) if (!todas.includes(v)) todas.push(v);
+  const filas = [];
+  for (const v of todas) {
+    const fila = [v];
+    const filaSE = [''];
+    for (const n of nombres) {
+      const f = ses.modelosGuardados[n];
+      const j = f.names.indexOf(v);
+      if (j < 0) { fila.push(''); filaSE.push(''); continue; }
+      let est = '';
+      for (const e of estrellas) if (f.p[j] < e.p) { est = e.s; }
+      fila.push(fmtG(f.b[j], 5) + est);
+      filaSE.push(conSE ? `(${fmtG(f.se[j], 5)})` : '');
+    }
+    filas.push(fila);
+    if (conSE) filas.push(filaSE);
+  }
+  filas.push(['N', ...nombres.map((n) => String(ses.modelosGuardados[n].N))]);
+  filas.push(['R2', ...nombres.map((n) => {
+    const f = ses.modelosGuardados[n];
+    if (f.r2 !== undefined && !isNaN(f.r2)) return f.r2.toFixed(4);
+    if (f.r2_p !== undefined && !isNaN(f.r2_p)) return f.r2_p.toFixed(4) + ' (pseudo)';
+    return '';
+  })]);
+  ses.txt(F.tablaSimple(['', ...nombres], filas, ['i', ...nombres.map(() => 'd')]));
+  ses.txt('\n  ' + estrellas.slice().reverse().map((e) => `${e.s} p<${e.p}`).join('   '));
+  ses.profeTexto('Esta es la tabla que va en tu trabajo', [
+    { tono: 'info', texto: 'Poner los modelos lado a lado sirve para mostrar que tu resultado <strong>no depende</strong> de qué controles metiste. Si el coeficiente que te interesa se mantiene parecido en todas las columnas, tu hallazgo es sólido.' },
+    { tono: 'ojo', texto: 'Si comparas un MPL con efectos marginales de logit y probit, recuerda que <strong>solo son comparables los efectos marginales</strong>, nunca los coeficientes crudos del logit contra los del MPL.' },
+  ]);
 });
 
 registrarComando('lincom', (p, ses) => {
