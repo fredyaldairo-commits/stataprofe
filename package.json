@@ -1,0 +1,11 @@
+{
+  "name": "stataprofe",
+  "version": "1.0.0",
+  "description": "Simulador de Stata con profesor incorporado, en el navegador",
+  "type": "module",
+  "private": true,
+  "scripts": {
+    "test": "node test/run_all.mjs",
+    "dev": "node scripts/serve.mjs"
+  }
+}

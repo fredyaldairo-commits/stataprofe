@@ -1,0 +1,188 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+<meta name="theme-color" content="#0E1626">
+<meta name="description" content="Simulador de Stata con un profesor que te corrige y te explica los resultados. Econometría paso a paso, en español.">
+<title>StataProfe · aprende econometría haciendo</title>
+<link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>📊</text></svg>">
+<link rel="manifest" href="manifest.json">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,400;12..96,600;12..96,800&family=Newsreader:opsz,wght@6..72,400;6..72,500;6..72,600&family=IBM+Plex+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="css/app.css">
+</head>
+<body>
+
+<header class="top">
+  <div class="brand">
+    <span class="logo">📊</span>
+    <span>
+      <b>StataProfe</b>
+      <small>simulador con profesor incorporado</small>
+    </span>
+  </div>
+  <div class="top-estado" id="estadoBase">sin base abierta</div>
+  <div class="top-acciones">
+    <button class="btn-icono" id="btnSubir" title="Subir tus propios datos (CSV)">📤<span>Subir datos</span></button>
+    <button class="btn-icono" id="btnLog" title="Descargar todo lo que hiciste">💾<span>Log</span></button>
+    <button class="btn-icono" id="btnTema" title="Cambiar entre claro y oscuro">🌓</button>
+    <button class="btn-icono" id="btnAjustes" title="Ajustes y clave de Gemini">⚙️</button>
+  </div>
+</header>
+
+<nav class="tabs" id="tabs">
+  <button class="tab activa" data-vista="consola">Consola</button>
+  <button class="tab" data-vista="dofile">Do-file</button>
+  <button class="tab" data-vista="datos">Datos</button>
+  <button class="tab" data-vista="curso">Curso <span class="pip" id="pipCurso"></span></button>
+  <button class="tab" data-vista="ayuda">Ayuda</button>
+</nav>
+
+<main>
+  <!-- ───────────────────────────── consola -->
+  <section class="vista activa" id="v-consola">
+    <div class="col-salida">
+      <div class="salida" id="salida">
+        <div class="bienvenida">
+          <h1>Escribe comandos de Stata y te los corrijo.</h1>
+          <p>Esto corre de verdad: cada número que veas sale de un cálculo sobre los datos, no de un ejemplo guardado. Si te equivocas al escribir, te digo cómo debería ir. Cuando salga un resultado, te lo interpreto.</p>
+          <div class="atajos">
+            <button class="sug" data-cmd="use enemdu_eloro_2024, clear">use enemdu_eloro_2024, clear</button>
+            <button class="sug" data-cmd="describe">describe</button>
+            <button class="sug" data-cmd="summarize ingreso educ exper">summarize ingreso educ exper</button>
+            <button class="sug" data-cmd="reg ingreso educ exper mujer, robust">reg ingreso educ exper mujer, robust</button>
+            <button class="sug" data-cmd="ayuda">ayuda</button>
+          </div>
+          <p class="mini">¿No sabes por dónde empezar? Anda a la pestaña <b>Curso</b>: son 14 módulos que se van desbloqueando de a poco.</p>
+        </div>
+      </div>
+      <form class="barra-cmd" id="formCmd" autocomplete="off">
+        <span class="prompt">.</span>
+        <input type="text" id="entrada" placeholder="escribe un comando…" autocapitalize="off" autocorrect="off" spellcheck="false">
+        <button type="submit" class="btn-run" title="Ejecutar (Enter)">▶</button>
+      </form>
+      <div class="autocompletar" id="autocompletar"></div>
+    </div>
+  </section>
+
+  <!-- ───────────────────────────── do-file -->
+  <section class="vista" id="v-dofile">
+    <div class="dofile-cab">
+      <div>
+        <b>Tu do-file</b>
+        <small>escribe varias líneas y córrelas todas juntas</small>
+      </div>
+      <div class="dofile-btns">
+        <button class="btn" id="btnCorrerDo">▶ Ejecutar todo</button>
+        <button class="btn sec" id="btnCorrerSel">Ejecutar selección</button>
+        <button class="btn sec" id="btnPlantilla">Plantilla</button>
+        <button class="btn sec" id="btnBajarDo">Descargar .do</button>
+      </div>
+    </div>
+    <div class="dofile-cuerpo">
+      <textarea id="editor" spellcheck="false" placeholder="* Escribe aquí tu do-file&#10;clear all&#10;set more off&#10;&#10;use enemdu_eloro_2024, clear"></textarea>
+      <div class="salida" id="salidaDo"></div>
+    </div>
+  </section>
+
+  <!-- ───────────────────────────── datos -->
+  <section class="vista" id="v-datos">
+    <div class="datos-cab">
+      <div class="datos-info" id="datosInfo">Abre una base para verla aquí.</div>
+      <input type="search" id="filtroVar" placeholder="filtrar variables…">
+    </div>
+    <div class="datos-cuerpo">
+      <div class="panel-vars" id="panelVars"></div>
+      <div class="tabla-scroll" id="tablaDatos"></div>
+    </div>
+  </section>
+
+  <!-- ───────────────────────────── curso -->
+  <section class="vista" id="v-curso">
+    <div class="curso-cab">
+      <div class="prog">
+        <div class="prog-nivel">
+          <span class="nivel-nombre" id="nivelNombre">Aprendiz</span>
+          <span class="nivel-xp" id="nivelXP">0 XP</span>
+        </div>
+        <div class="prog-barra"><div class="prog-fill" id="progFill"></div></div>
+        <div class="prog-txt" id="progTxt">0 de 0 lecciones</div>
+      </div>
+      <div class="insignias" id="insignias"></div>
+      <button class="btn sec" id="btnReiniciar">Reiniciar progreso</button>
+    </div>
+    <div class="curso-cuerpo" id="cursoCuerpo"></div>
+  </section>
+
+  <!-- ───────────────────────────── ayuda -->
+  <section class="vista" id="v-ayuda">
+    <div class="ayuda-cuerpo" id="ayudaCuerpo"></div>
+  </section>
+</main>
+
+<!-- panel de la lección activa -->
+<aside class="leccion-panel" id="leccionPanel">
+  <div class="lp-cab">
+    <div>
+      <div class="lp-modulo" id="lpModulo"></div>
+      <div class="lp-titulo" id="lpTitulo"></div>
+    </div>
+    <button class="lp-cerrar" id="lpCerrar" title="Cerrar">✕</button>
+  </div>
+  <div class="lp-cuerpo" id="lpCuerpo"></div>
+  <div class="lp-pie">
+    <button class="btn sec" id="btnPista">Dame una pista</button>
+    <button class="btn sec" id="btnSolucion">Ver la respuesta</button>
+  </div>
+</aside>
+
+<!-- diálogo de ajustes -->
+<div class="modal" id="modalAjustes">
+  <div class="modal-caja">
+    <button class="modal-x" id="ajustesX">✕</button>
+    <h3>Ajustes</h3>
+
+    <h4>Preguntarle al profe (Gemini)</h4>
+    <p class="mini">El profesor de este simulador funciona <b>sin internet</b>: todas las interpretaciones de resultados salen de reglas de econometría programadas aquí. Si además quieres poder hacerle preguntas libres en español, pega tu clave de la API de Gemini.</p>
+    <input type="password" id="claveGemini" placeholder="clave de la API de Gemini (opcional)">
+    <div class="fila-btns">
+      <button class="btn" id="btnGuardarClave">Guardar</button>
+      <button class="btn sec" id="btnProbarClave">Probar</button>
+      <button class="btn sec" id="btnBorrarClave">Borrar</button>
+    </div>
+    <p class="mini" id="estadoClave"></p>
+    <p class="mini aviso-clave">⚠️ La clave se guarda solo en <b>este</b> dispositivo (en el navegador). Aun así, cualquiera que use este dispositivo puede verla. Consigue la clave gratis en <a href="https://aistudio.google.com/apikey" target="_blank" rel="noopener">aistudio.google.com/apikey</a> y ponle un límite de gasto.</p>
+
+    <h4>Apariencia</h4>
+    <label class="check"><input type="checkbox" id="chkGrande"> Letra más grande (para tablet)</label>
+    <label class="check"><input type="checkbox" id="chkProfe" checked> Mostrar las explicaciones del profesor</label>
+
+    <h4>Tus datos</h4>
+    <p class="mini">Todo lo que haces se guarda solo en este dispositivo. Nada se sube a ningún servidor (excepto tus preguntas a Gemini, si activas esa opción).</p>
+    <div class="fila-btns">
+      <button class="btn sec" id="btnBorrarTodo">Borrar todo lo guardado</button>
+    </div>
+  </div>
+</div>
+
+<!-- botón flotante para preguntarle al profe -->
+<button class="fab" id="fabProfe" title="Pregúntale al profe">💬</button>
+<div class="chat" id="chatProfe">
+  <div class="chat-cab">
+    <b>Pregúntale al profe</b>
+    <button class="chat-x" id="chatX">✕</button>
+  </div>
+  <div class="chat-msgs" id="chatMsgs"></div>
+  <form class="chat-form" id="chatForm">
+    <input type="text" id="chatInput" placeholder="¿por qué mi R² es tan bajo?" autocomplete="off">
+    <button type="submit">→</button>
+  </form>
+</div>
+
+<input type="file" id="archivoCSV" accept=".csv,.txt,.tsv" hidden>
+
+<script type="module" src="js/app.js"></script>
+</body>
+</html>

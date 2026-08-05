@@ -1,0 +1,19 @@
+{
+  "name": "StataProfe · econometría paso a paso",
+  "short_name": "StataProfe",
+  "description": "Simulador de Stata con un profesor que corrige tus comandos y te interpreta los resultados.",
+  "start_url": "./",
+  "display": "standalone",
+  "orientation": "any",
+  "background_color": "#E6EBF2",
+  "theme_color": "#0E1626",
+  "lang": "es",
+  "icons": [
+    {
+      "src": "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 512 512'%3E%3Crect width='512' height='512' rx='96' fill='%230E1626'/%3E%3Ctext x='50%25' y='54%25' font-size='300' text-anchor='middle' dominant-baseline='middle'%3E📊%3C/text%3E%3C/svg%3E",
+      "sizes": "512x512",
+      "type": "image/svg+xml",
+      "purpose": "any maskable"
+    }
+  ]
+}
