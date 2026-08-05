@@ -36,6 +36,7 @@
   <button class="tab activa" data-vista="consola">Consola</button>
   <button class="tab" data-vista="dofile">Do-file</button>
   <button class="tab" data-vista="datos">Datos</button>
+  <button class="tab" data-vista="modelos">Modelos</button>
   <button class="tab" data-vista="curso">Curso <span class="pip" id="pipCurso"></span></button>
   <button class="tab" data-vista="ayuda">Ayuda</button>
 </nav>
@@ -55,7 +56,7 @@
             <button class="sug" data-cmd="reg ingreso educ exper mujer, robust">reg ingreso educ exper mujer, robust</button>
             <button class="sug" data-cmd="ayuda">ayuda</button>
           </div>
-          <p class="mini">¿No sabes por dónde empezar? Anda a la pestaña <b>Curso</b>: son 14 módulos que se van desbloqueando de a poco.</p>
+          <p class="mini">¿No sabes cuál modelo usar? Anda a <b>Modelos</b>: están los 17 ordenados del más fácil al más difícil, cada uno con su ejemplo listo para correr. ¿Prefieres ir paso a paso? Anda a <b>Curso</b>: 14 módulos que se van desbloqueando de a poco.</p>
         </div>
       </div>
       <form class="barra-cmd" id="formCmd" autocomplete="off">
@@ -97,6 +98,18 @@
       <div class="panel-vars" id="panelVars"></div>
       <div class="tabla-scroll" id="tablaDatos"></div>
     </div>
+  </section>
+
+  <!-- ───────────────────────────── modelos -->
+  <section class="vista" id="v-modelos">
+    <div class="modelos-cab">
+      <div>
+        <b>Los 17 modelos, del más fácil al más difícil</b>
+        <small>cada uno con su ejemplo listo para correr sobre la misma base</small>
+      </div>
+      <div class="filtro-fam" id="filtroFam"></div>
+    </div>
+    <div class="modelos-cuerpo" id="modelosCuerpo"></div>
   </section>
 
   <!-- ───────────────────────────── curso -->

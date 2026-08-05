@@ -4,6 +4,7 @@ import { Sesion, ejecutarLinea, ejecutarDoFile } from './core/comandos.js';
 import { COMANDOS } from './core/parser.js';
 import { CATALOGO } from './data/datasets.js';
 import { MODULOS, NIVELES, INSIGNIAS, totalLecciones, nivelDe, buscarLeccion } from './curriculum.js';
+import { MODELOS_CATALOGO, PRIMOS, NIVELES_DIF, REGLA, SUPUESTOS_MCO } from './modelos.js';
 import { preguntarGemini, tieneClave, guardarClave, borrarClave, probarClave } from './gemini.js';
 import { esNulo, fmtG, fmtP, padI, corta } from './core/util.js';
 
@@ -488,6 +489,7 @@ function cambiarVista(v) {
   $$('.tab').forEach((t) => t.classList.toggle('activa', t.dataset.vista === v));
   if (v === 'datos') pintarDatos();
   if (v === 'curso') pintarCurso();
+  if (v === 'modelos') pintarModelos();
   if (v === 'ayuda') pintarAyuda();
   if (v === 'consola') setTimeout(() => $('#entrada').focus(), 60);
 }
@@ -583,6 +585,129 @@ function parsearCSV(texto, nombre) {
     }
   });
   return { nombre, n: filas.length, vars, data, valueLabels: {}, notas: `Archivo subido por ti: ${nombre}` };
+}
+
+// ─────────────────────────────────────────────── catálogo de modelos
+let famActiva = 'todas';
+
+function pintarModelos() {
+  const familias = ['todas', ...new Set(MODELOS_CATALOGO.map((m) => m.familia))];
+  $('#filtroFam').innerHTML = familias.map((f) =>
+    `<button class="chip-fam ${f === famActiva ? 'on' : ''}" data-f="${esc(f)}">${f === 'todas' ? 'Todos' : esc(f)}</button>`).join('');
+  $$('#filtroFam .chip-fam').forEach((b) => b.addEventListener('click', () => { famActiva = b.dataset.f; pintarModelos(); }));
+
+  const lista = MODELOS_CATALOGO.filter((m) => famActiva === 'todas' || m.familia === famActiva);
+  const arbol = `<div class="regla">
+      <div class="regla-tit">🧭 ${esc(REGLA.titulo)}</div>
+      <p>${REGLA.texto}</p>
+      <div class="regla-tabla">
+        ${REGLA.ramas.map((r) => `<div class="rama">
+          <div class="rama-y"><b>${esc(r.y)}</b><small>${esc(r.ej)}</small></div>
+          <div class="rama-flecha">→</div>
+          <div class="rama-m">
+            <b>${esc(r.modelo)}</b>
+            <div class="rama-nums">${r.n.map((n) => `<button class="num-ir" data-ir="${n}">${n}</button>`).join('')}</div>
+          </div>
+        </div>`).join('')}
+      </div>
+    </div>`;
+
+  const tarjetas = lista.map((m) => {
+    const dif = NIVELES_DIF[m.nivel];
+    return `<article class="mcard" id="mod-${m.id}" data-n="${m.n}">
+      <header class="mcard-cab">
+        <span class="mcard-n">${m.n}</span>
+        <div class="mcard-tit">
+          <b>${esc(m.nombre)}</b>
+          <small>${esc(m.familia)}</small>
+        </div>
+        <span class="mcard-dif ${dif.color}">${'●'.repeat(m.nivel)}${'○'.repeat(5 - m.nivel)} ${esc(dif.nombre)}</span>
+      </header>
+      <div class="mcard-cuerpo">
+        <div class="mcard-preg">${esc(m.pregunta)}</div>
+        <div class="mcard-ej">Por ejemplo: <em>${esc(m.ejemplo)}</em></div>
+        <div class="mcard-nec"><span class="et">Necesitas</span>${m.necesitas}</div>
+
+        <div class="mcard-cmd">
+          <div class="cmd-barra">
+            <span class="et">Comandos</span>
+            <span class="cmd-btns">
+              <button class="btn-mini correr" data-cmd="${esc(m.comandos)}">▶ Correr el ejemplo</button>
+              <button class="btn-mini copiar" data-cmd="${esc(m.comandos)}">Copiar</button>
+              <button class="btn-mini aldo" data-cmd="${esc(m.comandos)}">Al do-file</button>
+            </span>
+          </div>
+          <pre>${esc(m.comandos)}</pre>
+        </div>
+
+        <div class="mcard-lec"><span class="et">Cómo se lee</span>${m.lectura}</div>
+        <div class="mcard-ojo"><span class="et">Ojo con esto</span>${m.ojo}</div>
+        ${m.despues && m.despues.length ? `<div class="mcard-desp"><span class="et">Qué correr después</span>
+          ${m.despues.map((d) => `<button class="sug" data-cmd="${esc(d)}">${esc(d)}</button>`).join('')}</div>` : ''}
+        ${m.cuandoNo ? `<div class="mcard-no"><span class="et">Cuándo NO usarlo</span>${m.cuandoNo}</div>` : ''}
+      </div>
+    </article>`;
+  }).join('');
+
+  const primos = `<div class="primos">
+    <h3>Los primos más especializados</h3>
+    <p class="mini">No es que estos sean "mejores". Es que los modelos base hacen suposiciones de simplicidad para poder calcularse rápido; estos sueltan una de esas suposiciones cuando tú sabes que no aplica a tus datos.</p>
+    ${PRIMOS.map((p) => `<div class="primo ${p.enSimulador ? 'hay' : ''}">
+      <div class="primo-cab"><b>${esc(p.nombre)}</b> <code>${esc(p.comando)}</code>
+        <span class="primo-tag">${p.enSimulador ? '✓ está en el simulador' : 'solo en Stata real'}</span></div>
+      <div class="primo-cuando"><b>Cuándo:</b> ${esc(p.cuando)}</div>
+      <div class="primo-porque">${esc(p.porque)}</div>
+    </div>`).join('')}
+  </div>`;
+
+  const supuestos = `<div class="supuestos-caja">
+    <h3>Después de cualquier modelo lineal, siempre lo mismo</h3>
+    <p class="mini">Los cuatro chequeos van igual para los modelos 1 a 9. Stata siempre te da una tabla bonita, esté bien o mal usado el modelo: por eso hay que revisar.</p>
+    <div class="mcard-cmd">
+      <div class="cmd-barra"><span class="et">Bloque de supuestos</span>
+        <span class="cmd-btns"><button class="btn-mini correr" data-cmd="${esc(SUPUESTOS_MCO)}">▶ Correr</button>
+        <button class="btn-mini aldo" data-cmd="${esc(SUPUESTOS_MCO)}">Al do-file</button></span></div>
+      <pre>${esc(SUPUESTOS_MCO)}</pre>
+    </div>
+    <p class="mini">Y después de un logit o probit, el bloque es otro: <code>margins, dydx(*)</code> · <code>estat classification</code> · <code>lroc</code> · <code>estat gof</code>.</p>
+  </div>`;
+
+  $('#modelosCuerpo').innerHTML = `<div class="modelos-doc">${arbol}${tarjetas}${supuestos}${primos}</div>`;
+
+  // acciones
+  $$('#modelosCuerpo .correr').forEach((b) => b.addEventListener('click', () => correrBloque(b.dataset.cmd)));
+  $$('#modelosCuerpo .copiar').forEach((b) => b.addEventListener('click', async () => {
+    try { await navigator.clipboard.writeText(b.dataset.cmd); toast('Copiado'); }
+    catch { toast('No pude copiar; selecciónalo a mano'); }
+  }));
+  $$('#modelosCuerpo .aldo').forEach((b) => b.addEventListener('click', () => {
+    const sep = editor.value.trim() ? '\n\n' : '';
+    editor.value = editor.value + sep + b.dataset.cmd + '\n';
+    escribir(K.dofile, editor.value);
+    cambiarVista('dofile');
+    editor.scrollTop = editor.scrollHeight;
+    toast('Agregado al do-file');
+  }));
+  $$('#modelosCuerpo .num-ir').forEach((b) => b.addEventListener('click', () => {
+    famActiva = 'todas';
+    pintarModelos();
+    const m = MODELOS_CATALOGO.find((x) => x.n === Number(b.dataset.ir));
+    const el = $('#mod-' + m.id);
+    if (el) { el.scrollIntoView({ behavior: 'smooth', block: 'start' }); el.classList.add('resaltado'); setTimeout(() => el.classList.remove('resaltado'), 1600); }
+  }));
+}
+
+/** Corre un bloque de varias líneas en la consola, mostrando cada una. */
+function correrBloque(texto) {
+  cambiarVista('consola');
+  const b = $('.bienvenida'); if (b) b.remove();
+  const salida = $('#salida');
+  const lineas = texto.split('\n').filter((l) => l.trim());
+  for (const l of lineas) {
+    const res = correr(l, salida);
+    if (res.some((x) => x.t === 'err')) break;
+  }
+  salida.scrollTop = salida.scrollHeight;
 }
 
 // ─────────────────────────────────────────────── ayuda

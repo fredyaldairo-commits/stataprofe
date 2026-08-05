@@ -71,6 +71,28 @@ export const MODULOS = [
        'Después del asterisco escribe lo que quieras, en español normal.',
        'Por ejemplo: <code>* Trabajo de econometría: ingresos en El Oro</code>'],
       10, 'Bien. Un código comentado vale el doble que uno sin comentar.'),
+
+    L('m0l6', 'Cómo se elige el modelo',
+      'La regla que decide todo lo que viene después.',
+      `<p>Antes de aprender ningún modelo, hay que saber <strong>cuál va</strong>. Y la regla es más simple de lo que parece: mira <strong>qué tipo de cosa es lo que quieres explicar</strong> (la variable Y). Eso solo decide el modelo.</p>
+       <ul>
+         <li>Un número cualquiera (dólares) → <strong>regresión</strong></li>
+         <li>Un número que quieres leer en % → <strong>regresión con logaritmos</strong></li>
+         <li>Comparar promedios de grupos → <strong>ANOVA / dummies</strong></li>
+         <li>Un sí o un no → <strong>logit / probit</strong></li>
+         <li>3 o más opciones sin orden → <strong>mlogit / mprobit</strong></li>
+         <li>3 o más opciones con orden → <strong>ologit / oprobit</strong></li>
+         <li>Un conteo (0, 1, 2, 3…) → <strong>poisson</strong></li>
+       </ul>
+       <p>Abre la pestaña <strong>Modelos</strong> de arriba: ahí están los 17 ordenados del más fácil al más difícil, cada uno con su ejemplo listo para correr. Ese es tu mapa: vuelve ahí cada vez que no sepas cuál usar.</p>
+       <p>El curso los va enseñando <strong>en ese mismo orden</strong>, uno a uno, para que no te caigan todos de golpe.</p>`,
+      'Mira qué tipo de variable es <code>formal</code>: ¿cuántos valores distintos tiene?',
+      'tab formal',
+      { comandos: ['tabulate'], variables: ['formal'] },
+      ['Usa <code>tab</code> con la variable.',
+       'La variable se llama <code>formal</code>.',
+       'Escribe: <code>tab formal</code>'],
+      15, 'Solo dos valores: sí y no. Por eso más adelante <code>formal</code> se va a modelar con logit, no con una regresión normal. Ya sabes elegir.'),
   ],
 },
 // ────────────────────────────────────────────────────────────── 1

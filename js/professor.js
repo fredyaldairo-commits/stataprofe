@@ -368,6 +368,59 @@ export function interpretarOlogit(fit, ctx = {}) {
   return bloque('Qué dice este modelo ordenado', resumen, items, { filas });
 }
 
+// ------------------------------------------------------------------ Poisson
+
+export function interpretarPoisson(fit, ctx = {}) {
+  const ds = ctx.ds;
+  const items = [], filas = [];
+  const media = fit.y.reduce((a, b) => a + b, 0) / fit.N;
+  const varianza = fit.y.reduce((a, b) => a + (b - media) ** 2, 0) / (fit.N - 1);
+
+  const resumen = `Este modelo explica un <strong>conteo</strong> (${fit.depvar}: 0, 1, 2, 3…). ` +
+    (fit.p_chi2 < 0.05
+      ? `En conjunto las variables sí ayudan a explicarlo (valor p ${pTxt(fit.p_chi2)}).`
+      : `Pero en conjunto las variables no logran explicarlo (valor p ${pTxt(fit.p_chi2)}).`);
+
+  items.push({
+    tono: 'ojo',
+    texto: 'Los coeficientes de Poisson <strong>no se leen directo</strong>: están en escala de logaritmo. Para pasarlos a algo entendible se usa <strong>(e^b − 1) × 100</strong>, que da el cambio porcentual esperado en el conteo por cada unidad más de esa variable.',
+  });
+
+  // sobredispersión: el supuesto que más se rompe
+  const razon = varianza / media;
+  if (razon > 1.25) {
+    items.push({
+      tono: 'mal',
+      texto: `<strong>Ojo con el supuesto principal.</strong> Poisson exige que la media y la varianza del conteo sean iguales. Aquí la media es ${n2(media)} y la varianza ${n2(varianza)}: la varianza es ${n2(razon)} veces la media. Eso se llama <strong>sobredispersión</strong>, y hace que los errores estándar salgan más chicos de lo que deberían (o sea, cosas que parecen significativas podrían no serlo). Lo correcto sería una binomial negativa (<code>nbreg</code>), que no está en este simulador. Menciónalo en tu informe.`,
+    });
+  } else {
+    items.push({
+      tono: 'ok',
+      texto: `El supuesto principal se cumple razonablemente: la media del conteo es ${n2(media)} y la varianza ${n2(varianza)}, bastante parecidas. Poisson exige justamente eso.`,
+    });
+  }
+  items.push({
+    tono: 'info',
+    texto: 'El pseudo R² de Poisson tampoco se lee como el R² de una regresión normal. No lo compares con el de un modelo lineal.',
+  });
+
+  fit.names.forEach((nm, j) => {
+    if (nm === '_cons') {
+      filas.push({ nombre: nm, veredicto: veredicto(fit.p[j]), noInterpretar: true,
+        texto: 'La constante de un Poisson no se interpreta: sería el logaritmo del conteo esperado con todas las variables en cero.' });
+      return;
+    }
+    const pct = (Math.exp(fit.b[j]) - 1) * 100;
+    const t = tipoTermino(nm, ds, fit.depvar);
+    filas.push({
+      nombre: nm, veredicto: veredicto(fit.p[j]),
+      texto: `Por cada unidad más de <code>${t.variable || nm}</code>, ${fit.depvar} ${pct > 0 ? 'sube' : 'baja'} un <strong>${n2(Math.abs(pct))}%</strong> en promedio, manteniendo lo demás constante. (Sale de (e^${n2(fit.b[j], 4)} − 1) × 100.) ${fraseSignificancia(fit.p[j])}`,
+    });
+  });
+
+  return bloque('Qué dice este modelo de conteos', resumen, items, { filas });
+}
+
 // ------------------------------------------------------------------ ANOVA
 
 export function interpretarAnova(a, ctx = {}) {

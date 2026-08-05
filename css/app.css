@@ -366,6 +366,103 @@ table.datos td.num{text-align:right}
 .lp-pie{display:flex; gap:7px; padding:11px 16px; border-top:1px solid var(--line); padding-bottom:max(11px, env(safe-area-inset-bottom))}
 .lp-pie .btn{flex:1}
 
+/* ───────────────────────── catálogo de modelos */
+.modelos-cab{
+  display:flex; align-items:center; justify-content:space-between; gap:14px; flex-wrap:wrap;
+  padding:11px 16px; border-bottom:1px solid var(--line); background:var(--card); flex:none;
+}
+.modelos-cab b{font-family:var(--d); font-size:15.5px}
+.modelos-cab small{display:block; color:var(--ink3); font-size:13px}
+.filtro-fam{display:flex; gap:5px; flex-wrap:wrap}
+.chip-fam{
+  font-family:var(--m); font-size:11px; background:var(--card2); color:var(--ink2);
+  border:1px solid var(--line); border-radius:99px; padding:6px 12px;
+}
+.chip-fam.on{background:var(--blue); color:#fff; border-color:var(--blue)}
+.modelos-cuerpo{flex:1; overflow-y:auto; padding:16px}
+.modelos-doc{max-width:820px; margin:0 auto}
+
+/* el árbol de decisión */
+.regla{background:var(--ochre-bg); border-left:3px solid var(--ochre); border-radius:0 12px 12px 0; padding:16px 18px; margin-bottom:20px}
+.regla-tit{font-family:var(--d); font-weight:800; font-size:17px; margin-bottom:6px}
+.regla p{font-size:16px; margin-bottom:12px}
+.regla-tabla{display:flex; flex-direction:column; gap:6px}
+.rama{
+  display:grid; grid-template-columns:1fr auto 1fr; gap:10px; align-items:center;
+  background:var(--card); border-radius:9px; padding:9px 12px;
+}
+.rama-y b{font-size:14.5px; display:block; line-height:1.3}
+.rama-y small{color:var(--ink3); font-size:12.5px; font-style:italic}
+.rama-flecha{color:var(--ink3); font-size:15px}
+.rama-m b{font-family:var(--d); font-size:14.5px; color:var(--blue); display:block}
+.rama-nums{display:flex; gap:4px; margin-top:4px; flex-wrap:wrap}
+.num-ir{
+  font-family:var(--m); font-size:10.5px; width:22px; height:22px; border-radius:6px;
+  background:var(--blue-bg); color:var(--blue); border:1px solid var(--blue); line-height:1; padding:0;
+}
+.num-ir:hover{background:var(--blue); color:#fff}
+@media(max-width:640px){ .rama{grid-template-columns:1fr; gap:4px} .rama-flecha{display:none} }
+
+/* tarjeta de modelo */
+.mcard{
+  background:var(--card); border:1px solid var(--line); border-radius:12px;
+  margin-bottom:13px; overflow:hidden; scroll-margin-top:14px;
+}
+.mcard.resaltado{border-color:var(--blue); box-shadow:0 0 0 3px var(--blue-bg)}
+.mcard-cab{display:flex; align-items:center; gap:12px; padding:13px 16px; background:var(--card2); border-bottom:1px solid var(--line); flex-wrap:wrap}
+.mcard-n{
+  font-family:var(--d); font-weight:800; font-size:17px; width:32px; height:32px; flex:none;
+  display:grid; place-items:center; border-radius:9px; background:var(--ink); color:var(--paper);
+}
+.mcard-tit{flex:1; min-width:130px}
+.mcard-tit b{font-family:var(--d); font-size:17px; display:block; line-height:1.15}
+.mcard-tit small{color:var(--ink3); font-family:var(--m); font-size:10.5px; letter-spacing:.06em; text-transform:uppercase}
+.mcard-dif{font-family:var(--m); font-size:10.5px; letter-spacing:.04em; flex:none; padding:4px 9px; border-radius:99px}
+.mcard-dif.sig{background:var(--sig-bg); color:var(--sig)}
+.mcard-dif.blue{background:var(--blue-bg); color:var(--blue)}
+.mcard-dif.ochre{background:var(--ochre-bg); color:var(--ochre)}
+.mcard-dif.nosig{background:var(--nosig-bg); color:var(--nosig)}
+.mcard-cuerpo{padding:14px 16px}
+.mcard-preg{font-family:var(--d); font-weight:600; font-size:16.5px; margin-bottom:5px}
+.mcard-ej{color:var(--ink2); font-size:15.5px; margin-bottom:11px}
+.et{font-family:var(--m); font-size:9.5px; letter-spacing:.13em; text-transform:uppercase; color:var(--ink3); display:block; margin-bottom:4px}
+.mcard-nec,.mcard-lec,.mcard-ojo,.mcard-no,.mcard-desp{border-radius:8px; padding:10px 12px; margin:8px 0; font-size:15.5px; line-height:1.5}
+.mcard-nec{background:var(--card2)}
+.mcard-lec{background:var(--blue-bg)}
+.mcard-lec .et{color:var(--blue)}
+.mcard-ojo{background:var(--nosig-bg)}
+.mcard-ojo .et{color:var(--nosig)}
+.mcard-no{background:var(--card2); color:var(--ink2)}
+.mcard-desp{background:var(--sig-bg)}
+.mcard-desp .et{color:var(--sig)}
+.mcard-desp .sug{margin:3px 3px 0 0}
+
+.mcard-cmd{background:var(--term-bg); border-radius:9px; margin:10px 0; overflow:hidden}
+.cmd-barra{display:flex; justify-content:space-between; align-items:center; gap:8px; padding:8px 12px 4px; flex-wrap:wrap}
+.cmd-barra .et{color:#7C8CAB; margin:0}
+.cmd-btns{display:flex; gap:5px; flex-wrap:wrap}
+.btn-mini{
+  font-family:var(--m); font-size:10.5px; letter-spacing:.04em; background:#26314A; color:#B9C6DC;
+  border:1px solid #3A4763; border-radius:6px; padding:5px 10px;
+}
+.btn-mini:hover{background:#33415F; color:#fff}
+.btn-mini.correr{background:var(--blue); color:#fff; border-color:var(--blue)}
+.mcard-cmd pre{
+  margin:0; padding:4px 12px 12px; font-family:var(--m); font-size:13px; line-height:1.7;
+  color:var(--term-ink); overflow-x:auto; white-space:pre;
+}
+
+.supuestos-caja,.primos{background:var(--card); border:1px solid var(--line); border-radius:12px; padding:16px 18px; margin-bottom:14px}
+.supuestos-caja h3,.primos h3{font-size:18px; margin-bottom:6px}
+.primo{border-top:1px solid var(--line2); padding:11px 0}
+.primo:first-of-type{border-top:0}
+.primo-cab{display:flex; align-items:center; gap:8px; flex-wrap:wrap; margin-bottom:3px}
+.primo-cab b{font-family:var(--d); font-size:15px}
+.primo-tag{font-family:var(--m); font-size:9.5px; letter-spacing:.06em; text-transform:uppercase; color:var(--ink3); background:var(--card2); padding:3px 8px; border-radius:99px}
+.primo.hay .primo-tag{background:var(--sig-bg); color:var(--sig)}
+.primo-cuando{font-size:15px; margin-bottom:2px}
+.primo-porque{font-size:14.5px; color:var(--ink3); line-height:1.45}
+
 /* ───────────────────────── ayuda */
 .ayuda-cuerpo{flex:1; overflow-y:auto; padding:18px 18px 50px}
 .ayuda-cuerpo .doc{max-width:70ch; margin:0 auto}

@@ -241,6 +241,7 @@ registrarComando('poisson', (p, ses) => {
   ses.txt(F.encabezadoMV(fit, 'Regresión de Poisson'));
   ses.coef(fit, { etiquetaCoef: 'Coef.' });
   guardarModelo(ses, fit);
+  ses.profe(Prof.interpretarPoisson(fit, { ds: ses.ds }));
 });
 
 // ------------------------------------------------------------------ multinomial y ordenado
