@@ -5,6 +5,7 @@ import { COMANDOS } from './core/parser.js';
 import { CATALOGO } from './data/datasets.js';
 import { MODULOS, NIVELES, INSIGNIAS, totalLecciones, nivelDe, buscarLeccion } from './curriculum.js';
 import { MODELOS_CATALOGO, PRIMOS, NIVELES_DIF, REGLA, SUPUESTOS_MCO } from './modelos.js';
+import { DOFILES, FAMILIAS_DO, textoCompleto } from './dofiles.js';
 import { preguntarGemini, tieneClave, guardarClave, borrarClave, probarClave } from './gemini.js';
 import { esNulo, fmtG, fmtP, padI, corta } from './core/util.js';
 
@@ -28,6 +29,7 @@ const K = {
   guardadas: 'stataprofe.guardadas',
   hist: 'stataprofe.hist',
   paneles: 'stataprofe.paneles',
+  doActivo: 'stataprofe.doActivo',
 };
 const leer = (k, def) => { try { const v = localStorage.getItem(k); return v === null ? def : JSON.parse(v); } catch { return def; } };
 const escribir = (k, v) => { try { localStorage.setItem(k, JSON.stringify(v)); } catch { /* sin espacio */ } };
@@ -1030,56 +1032,167 @@ function correrDoFile(texto) {
   toast('Do-file ejecutado');
 }
 
+// ─────────────────────────────────────────────── biblioteca de do-files
+let doActivo = null;
+const seccionesHechas = new Set();
+
+function pintarBiblioteca() {
+  const cont = $('#bibLista');
+  cont.innerHTML = FAMILIAS_DO.map((fam) => {
+    const items = DOFILES.filter((d) => d.familia === fam);
+    return `<div class="bib-fam">${esc(fam)}</div>` + items.map((d) => `
+      <button class="bib-item" data-id="${d.id}">
+        <span class="bn">${d.n}</span>
+        <span><b>${esc(d.nombre)}</b><small>${esc(d.resumen)}</small></span>
+        <span class="bsec">${d.secciones.length} pasos</span>
+      </button>`).join('');
+  }).join('');
+  cont.querySelectorAll('.bib-item').forEach((el) => el.addEventListener('click', () => {
+    cargarDoFile(el.dataset.id);
+    $('#biblioteca').classList.remove('abierta');
+  }));
+}
+
+function cargarDoFile(id) {
+  const df = DOFILES.find((d) => d.id === id);
+  if (!df) return;
+  if (editor.value.trim() && !editor.dataset.deBiblioteca
+      && !confirm('Esto reemplaza lo que tienes escrito en el editor. ¿Seguro?')) return;
+  doActivo = df;
+  seccionesHechas.clear();
+  editor.value = textoCompleto(df);
+  editor.dataset.deBiblioteca = df.id;
+  escribir(K.dofile, editor.value);
+  $('#doNombre').textContent = `${df.n}. ${df.nombre}`;
+  $('#doResumen').innerHTML = `${esc(df.resumen)} &nbsp;·&nbsp; base <code>${esc(df.base)}</code>`;
+  $('#salidaDo').innerHTML = '';
+  escribir(K.doActivo, df.id);
+  pintarNavSecciones();
+  toast(`Do-file ${df.n} cargado: ${df.secciones.length} pasos`);
+}
+
+/** Al recargar la página, recupera el do-file que estaba abierto. */
+function restaurarDoFile() {
+  const id = leer(K.doActivo, null);
+  if (!id) return;
+  const df = DOFILES.find((d) => d.id === id);
+  if (!df) return;
+  // solo se reconecta si el texto del editor todavía es de ese do-file
+  if (!editor.value.includes(`Do-file ${df.n} — ${df.nombre}`)) return;
+  doActivo = df;
+  editor.dataset.deBiblioteca = df.id;
+  $('#doNombre').textContent = `${df.n}. ${df.nombre}`;
+  $('#doResumen').innerHTML = `${esc(df.resumen)} &nbsp;·&nbsp; base <code>${esc(df.base)}</code>`;
+  pintarNavSecciones();
+}
+
+function pintarNavSecciones() {
+  const nav = $('#navSecciones');
+  if (!doActivo) { nav.classList.remove('hay'); nav.innerHTML = ''; return; }
+  nav.classList.add('hay');
+  nav.innerHTML = '<span class="nav-et">Correr paso a paso</span>' +
+    doActivo.secciones.map((s, i) => `
+      <span class="sec-chip ${seccionesHechas.has(i) ? 'hecha' : ''}" data-i="${i}" title="${esc(s.porque || s.t)}">
+        <span class="sn">${seccionesHechas.has(i) ? '✓' : i + 1}</span>
+        <span class="st">${esc(s.t)}</span>
+        <button class="sr" data-run="${i}">▶</button>
+      </span>`).join('');
+  nav.querySelectorAll('.sr').forEach((b) => b.addEventListener('click', (e) => {
+    e.stopPropagation();
+    correrSeccion(Number(b.dataset.run));
+  }));
+  nav.querySelectorAll('.sec-chip').forEach((c) => c.addEventListener('click', () => {
+    // lleva el cursor a esa sección dentro del editor
+    const marca = `* ---- ${Number(c.dataset.i) + 1}. ${doActivo.secciones[Number(c.dataset.i)].t}`;
+    const pos = editor.value.indexOf(marca);
+    if (pos >= 0) {
+      editor.focus();
+      editor.setSelectionRange(pos, pos);
+      const antes = editor.value.slice(0, pos).split('\n').length;
+      editor.scrollTop = Math.max(0, (antes - 2) * 24);
+    }
+  }));
+}
+
+/** Saca el código de una sección DESDE EL EDITOR, para que respete lo que ella edite. */
+function codigoDeSeccion(i) {
+  const marca = (k) => `* ---- ${k + 1}. ${doActivo.secciones[k].t}`;
+  const texto = editor.value;
+  const ini = texto.indexOf(marca(i));
+  if (ini < 0) return doActivo.secciones[i].codigo;   // si la borró, se usa el original
+  const desde = texto.indexOf('\n', ini);
+  let hasta = texto.length;
+  for (let k = i + 1; k < doActivo.secciones.length; k++) {
+    const p = texto.indexOf(marca(k));
+    if (p > ini) { hasta = p; break; }
+  }
+  return texto.slice(desde + 1, hasta);
+}
+
+function correrSeccion(i) {
+  if (!doActivo) return;
+  const s = doActivo.secciones[i];
+  const dest = $('#salidaDo');
+  const cab = document.createElement('div');
+  cab.className = 'do-linea';
+  cab.textContent = `▶ paso ${i + 1} de ${doActivo.secciones.length}:  ${s.t}`;
+  dest.appendChild(cab);
+  if (s.porque) {
+    const p = document.createElement('div');
+    p.className = 'profe-item info';
+    p.style.margin = '6px 0 10px';
+    p.textContent = s.porque;
+    dest.appendChild(p);
+  }
+  const res = ejecutarDoFile(codigoDeSeccion(i), ses);
+  let hubo = false;
+  for (const r of res) {
+    if (r.detenido) {
+      const d = document.createElement('div');
+      d.className = 'do-detenido';
+      d.innerHTML = `⛔ Este paso se detuvo en su línea ${r.numero}. Arréglala y vuelve a darle ▶ a este mismo paso.`;
+      dest.appendChild(d);
+      hubo = true;
+      continue;
+    }
+    const t = document.createElement('div');
+    t.className = 'do-linea';
+    t.textContent = `. ${r.linea}`;
+    dest.appendChild(t);
+    render(r.bloques, dest);
+    anotarRevision(r.linea, r.bloques);
+    if (r.bloques.some((b) => b.t === 'err')) hubo = true;
+  }
+  if (!hubo) seccionesHechas.add(i); else seccionesHechas.delete(i);
+  pintarNavSecciones();
+  pintarEstado();
+  pintarVarsLateral();
+  dest.scrollTop = dest.scrollHeight;
+  if (!hubo && i + 1 < doActivo.secciones.length) {
+    toast(`Paso ${i + 1} listo. Sigue el ${i + 2}: ${doActivo.secciones[i + 1].t}`);
+  } else if (!hubo) {
+    toast('🎉 Terminaste todos los pasos de este do-file');
+  }
+}
+
+$('#btnBiblioteca').addEventListener('click', () => {
+  pintarBiblioteca();
+  $('#biblioteca').classList.add('abierta');
+});
+$('#bibX').addEventListener('click', () => $('#biblioteca').classList.remove('abierta'));
+$('#biblioteca').addEventListener('click', (e) => {
+  if (e.target.id === 'biblioteca') e.currentTarget.classList.remove('abierta');
+});
+
 $('#btnCorrerDo').addEventListener('click', () => correrDoFile());
 $('#btnCorrerSel').addEventListener('click', () => {
   const sel = editor.value.slice(editor.selectionStart, editor.selectionEnd);
   if (!sel.trim()) { toast('Selecciona primero las líneas que quieres correr'); return; }
   correrDoFile(sel);
 });
-$('#btnBajarDo').addEventListener('click', () => descargarTexto('mi_trabajo.do', editor.value));
-$('#btnPlantilla').addEventListener('click', () => {
-  if (editor.value.trim() && !confirm('Esto reemplaza lo que tienes escrito. ¿Seguro?')) return;
-  editor.value = `* ============================================================
-* Título:  Determinantes del ingreso en El Oro, 2024
-* Autora:  (tu nombre)
-* Fecha:   (fecha)
-* ============================================================
-
-clear all
-set more off
-
-* ---- 1. Abrir los datos --------------------------------------
-use enemdu_eloro_2024, clear
-
-* ---- 2. Depuración -------------------------------------------
-misstable summarize
-drop if missing(ingreso, educ, exper, horas)
-
-* ---- 3. Variables nuevas -------------------------------------
-gen lningreso = ln(ingreso)
-label variable lningreso "Logaritmo del ingreso mensual"
-
-* ---- 4. Descriptivas -----------------------------------------
-summarize ingreso educ exper horas
-tab tamano
-
-* ---- 5. Modelo -----------------------------------------------
-reg lningreso educ exper exper2 mujer i.tamano, robust
-estimates store completo
-
-* ---- 6. Supuestos --------------------------------------------
-estat vif
-estat hettest
-estat ovtest
-
-* ---- 7. Modelo de sí/no --------------------------------------
-logit formal educ exper mujer
-margins, dydx(*)
-estat classification
-lroc
-`;
-  escribir(K.dofile, editor.value);
-  toast('Plantilla lista: cámbiala a tu gusto');
+$('#btnBajarDo').addEventListener('click', () => {
+  const nombre = doActivo ? `do${String(doActivo.n).padStart(2, '0')}_${doActivo.id}.do` : 'mi_trabajo.do';
+  descargarTexto(nombre, editor.value);
 });
 
 // datos
@@ -1286,6 +1399,7 @@ pintarEstado();
 pintarCurso();
 pintarRevision();
 pintarVarsLateral();
+restaurarDoFile();
 // los botones de la barra de estado solo aparecen cuando el panel está oculto
 $$('.be-paneles button').forEach((b) => b.classList.add('escondido'));
 if (!leer(K.paneles, true)) { alternarPanel('panelRevision'); alternarPanel('panelVariables'); }

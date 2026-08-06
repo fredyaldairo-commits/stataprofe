@@ -81,20 +81,38 @@
     <!-- ───────────────────────────── do-file -->
     <section class="vista" id="v-dofile">
       <div class="dofile-cab">
-        <div>
-          <b>Tu do-file</b>
-          <small>escribe varias líneas y córrelas todas juntas</small>
+        <div class="do-titulo">
+          <b id="doNombre">Tu do-file</b>
+          <small id="doResumen">escribe varias líneas y córrelas todas juntas</small>
         </div>
         <div class="dofile-btns">
-          <button class="btn" id="btnCorrerDo">▶ Ejecutar todo</button>
+          <button class="btn" id="btnBiblioteca">📚 Un do-file por modelo</button>
+          <button class="btn sec" id="btnCorrerDo">▶ Ejecutar todo</button>
           <button class="btn sec" id="btnCorrerSel">Ejecutar selección</button>
-          <button class="btn sec" id="btnPlantilla">Plantilla</button>
           <button class="btn sec" id="btnBajarDo">Descargar .do</button>
         </div>
       </div>
+
+      <!-- navegador de secciones: para correr de a poco -->
+      <div class="nav-secciones" id="navSecciones"></div>
+
       <div class="dofile-cuerpo">
-        <textarea id="editor" spellcheck="false" placeholder="* Escribe aquí tu do-file&#10;clear all&#10;set more off&#10;&#10;use enemdu_eloro_2024, clear"></textarea>
+        <textarea id="editor" spellcheck="false" placeholder="* Escribe aquí tu do-file&#10;clear all&#10;set more off&#10;&#10;use enemdu_eloro_2024, clear&#10;&#10;* …o toca «Un do-file por modelo» para traer uno ya armado."></textarea>
         <div class="salida" id="salidaDo"></div>
+      </div>
+
+      <!-- biblioteca de do-files -->
+      <div class="biblioteca" id="biblioteca">
+        <div class="bib-caja">
+          <div class="bib-cab">
+            <div>
+              <b>Un do-file completo por cada modelo</b>
+              <small>cada uno trae la depuración, las transformaciones con <code>gen</code> y <code>label</code> que ese modelo necesita, el modelo y su postestimación</small>
+            </div>
+            <button class="bib-x" id="bibX">✕</button>
+          </div>
+          <div class="bib-lista" id="bibLista"></div>
+        </div>
       </div>
     </section>
 
