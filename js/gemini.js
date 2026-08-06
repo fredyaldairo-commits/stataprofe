@@ -176,10 +176,11 @@ export async function preguntarGemini(pregunta, ctx) {
   }
   contents.push({ role: 'user', parts: [{ text: armarPrompt(pregunta, ctx) }] });
 
+  // 900 se quedaba corto y cortaba las respuestas a media frase
   const cuerpo = {
     systemInstruction: { parts: [{ text: SISTEMA }] },
     contents,
-    generationConfig: { temperature: 0.4, maxOutputTokens: 900 },
+    generationConfig: { temperature: 0.4, maxOutputTokens: 2600 },
   };
 
   if (usarProxy) {
@@ -187,7 +188,8 @@ export async function preguntarGemini(pregunta, ctx) {
       method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(cuerpo),
     });
     if (!resp.ok) throw new Error(explicarError(resp.status, await resp.text().catch(() => '')));
-    return limpiar(sacarTexto(await resp.json()));
+    const rp = sacarTexto(await resp.json());
+    return limpiar(rp.texto + (rp.truncado ? '\n\n*(la respuesta quedó a medias; pregúntame por la parte que falta)*' : ''));
   }
 
   const clave = laClave();
@@ -195,6 +197,7 @@ export async function preguntarGemini(pregunta, ctx) {
 
   // se intenta con el modelo guardado; si ya no existe (404), se busca otro y se reintenta
   let modelo = await buscarModelo();
+  let r = null;
   for (let intento = 0; intento < 2; intento++) {
     let resp;
     try {
@@ -203,7 +206,7 @@ export async function preguntarGemini(pregunta, ctx) {
     } catch {
       throw new Error('no hay conexión a internet, o la red bloquea el servicio');
     }
-    if (resp.ok) return limpiar(sacarTexto(await resp.json()));
+    if (resp.ok) { r = sacarTexto(await resp.json()); break; }
     if (resp.status === 404 && intento === 0) {
       // el modelo guardado quedó obsoleto: se vuelve a buscar y se reintenta una vez
       modelo = await buscarModelo({ forzar: true });
@@ -211,20 +214,71 @@ export async function preguntarGemini(pregunta, ctx) {
     }
     throw new Error(explicarError(resp.status, await resp.text().catch(() => '')));
   }
-  throw new Error('no se pudo obtener respuesta');
+  if (!r) throw new Error('no se pudo obtener respuesta');
+
+  // Si se cortó por el límite de tokens, se le pide que siga desde donde quedó
+  // y se pega el resto. Hasta 2 veces, para no dispararse en consumo.
+  let texto = r.texto;
+  for (let seguir = 0; r.truncado && seguir < 2; seguir++) {
+    const cont = {
+      systemInstruction: cuerpo.systemInstruction,
+      contents: [
+        ...cuerpo.contents,
+        { role: 'model', parts: [{ text: texto }] },
+        { role: 'user', parts: [{ text: 'Se cortó. Continúa EXACTAMENTE desde donde quedaste, sin repetir nada de lo que ya dijiste y sin saludar de nuevo. Si ya habías terminado la idea, cierra en una frase.' }] },
+      ],
+      generationConfig: cuerpo.generationConfig,
+    };
+    let resp;
+    try {
+      resp = await fetch(`${BASE}/models/${modelo}:generateContent?key=${encodeURIComponent(clave)}`,
+        { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(cont) });
+    } catch { break; }
+    if (!resp.ok) break;
+    let r2;
+    try { r2 = sacarTexto(await resp.json()); } catch { break; }
+    if (!r2.texto) break;
+    texto = unir(texto, r2.texto);
+    r = r2;
+  }
+  if (r.truncado) texto += '\n\n*(la respuesta quedó a medias; pregúntame por la parte que falta)*';
+  return limpiar(texto);
+}
+
+/** Pega dos trozos sin duplicar el empalme ni comerse una palabra. */
+function unir(a, b) {
+  // OJO: si el segundo trozo empezaba con espacio, eso significa "palabra nueva".
+  // Hay que mirarlo ANTES de recortar, o se pegan dos palabras distintas.
+  const habiaEspacio = /^\s/.test(b) || /\s$/.test(a);
+  const izq = a.replace(/\s+$/, '');
+  const der = b.replace(/^\s+/, '');
+  if (!izq) return der;
+  if (!der) return izq;
+  // si el modelo repitió el final del trozo anterior, se quita el solape
+  for (let n = Math.min(120, izq.length, der.length); n > 12; n--) {
+    if (izq.slice(-n) === der.slice(0, n)) return izq + der.slice(n);
+  }
+  // solo se pegan sin espacio si el corte partió una palabra por la mitad
+  const partioPalabra = !habiaEspacio
+    && /[A-Za-zÁÉÍÓÚÑáéíóúñ0-9]$/.test(izq)
+    && /^[a-záéíóúñ0-9]/.test(der);
+  return izq + (partioPalabra ? '' : ' ') + der;
 }
 
 function sacarTexto(j) {
-  const texto = j?.candidates?.[0]?.content?.parts?.map((p) => p.text).filter(Boolean).join('') || '';
+  const c = j?.candidates?.[0];
+  const texto = c?.content?.parts?.map((p) => p.text).filter(Boolean).join('') || '';
+  const motivo = c?.finishReason || j?.promptFeedback?.blockReason;
   if (!texto) {
-    const motivo = j?.candidates?.[0]?.finishReason || j?.promptFeedback?.blockReason;
     if (motivo === 'SAFETY' || motivo === 'PROHIBITED_CONTENT') {
       throw new Error('el filtro de contenido de Google bloqueó la respuesta; prueba a preguntarlo de otra forma');
     }
-    if (motivo === 'MAX_TOKENS') throw new Error('la respuesta salió demasiado larga y se cortó');
+    if (motivo === 'MAX_TOKENS') {
+      throw new Error('el modelo gastó todo el presupuesto pensando y no alcanzó a escribir; prueba a preguntarlo más corto');
+    }
     throw new Error('la respuesta vino vacía');
   }
-  return texto;
+  return { texto, truncado: motivo === 'MAX_TOKENS' };
 }
 
 /** Quita markdown por si el modelo lo usa igual, y deja solo el HTML permitido. */
@@ -235,6 +289,10 @@ function limpiar(t) {
     .replace(/\*\*([^*]+)\*\*/g, '<strong>$1</strong>')
     .replace(/(^|\s)\*([^*\n]+)\*/g, '$1<em>$2</em>')
     .replace(/^#{1,6}\s*/gm, '');
+  // si la respuesta se cortó a mitad de un **negrita**, quedan asteriscos
+  // sueltos a la vista: se cierran para que no se vea el markdown crudo
+  if ((s.match(/\*\*/g) || []).length % 2 === 1) s = s.replace(/\*\*(?=[^*]*$)/, '<strong>') + '</strong>';
+  s = s.replace(/`(?=[^`]*$)/, '');
   s = s.replace(/^\s*[-•]\s+(.+)$/gm, '<li>$1</li>');
   s = s.replace(/(<li>[\s\S]*?<\/li>)(?!\s*<li>)/g, '<ul>$1</ul>');
   s = s.replace(/\n{2,}/g, '<br><br>').replace(/\n/g, '<br>');
