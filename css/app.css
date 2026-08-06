@@ -695,6 +695,67 @@ table.datos td.num{text-align:right}
 .guia-alt .a:hover{border-color:var(--blue); color:var(--ink)}
 .guia-acciones{display:flex; gap:8px; flex-wrap:wrap; margin-top:14px}
 
+/* ───────────────────────── supuestos: pasa o no pasa */
+.sup-cab{
+  display:flex; align-items:center; justify-content:space-between; gap:14px; flex-wrap:wrap;
+  padding:11px 16px; border-bottom:1px solid var(--line); background:var(--card); flex:none;
+}
+.sup-cab b{font-family:var(--d); font-size:15.5px}
+.sup-cab small{display:block; color:var(--ink3); font-size:13px}
+.sup-cuerpo{flex:1; overflow-y:auto; padding:16px}
+.sup-doc{max-width:820px; margin:0 auto}
+
+.sup-resumen{
+  display:flex; align-items:center; gap:16px; border-radius:12px; padding:16px 18px;
+  margin-bottom:18px; border-left:4px solid var(--line);
+}
+.sup-resumen.ok{background:var(--sig-bg); border-left-color:var(--sig)}
+.sup-resumen.ojo{background:var(--ochre-bg); border-left-color:var(--ochre)}
+.sup-resumen.mal{background:var(--nosig-bg); border-left-color:var(--nosig)}
+.sr-nota{font-family:var(--d); font-weight:800; font-size:36px; line-height:1; flex:none}
+.sr-nota span{font-size:19px; color:var(--ink3)}
+.sup-resumen.ok .sr-nota{color:var(--sig)}
+.sup-resumen.ojo .sr-nota{color:var(--ochre)}
+.sup-resumen.mal .sr-nota{color:var(--nosig)}
+.sr-txt b{font-family:var(--d); font-size:17px; display:block}
+.sr-txt small{font-size:14.5px; color:var(--ink2); line-height:1.45; display:block; margin-top:3px}
+
+.sup-vacio{background:var(--card); border:1px solid var(--line); border-radius:12px; padding:16px 18px; margin-bottom:18px}
+.sup-vacio p{font-size:16px}
+.sup-etapa{
+  font-family:var(--m); font-size:10px; letter-spacing:.14em; text-transform:uppercase;
+  color:var(--ink3); margin:20px 0 8px; padding-bottom:5px; border-bottom:1px solid var(--line);
+}
+.sup-card{
+  background:var(--card); border:1px solid var(--line); border-radius:11px;
+  padding:13px 15px; margin-bottom:9px; border-left:3px solid var(--line);
+}
+.sup-card.pasa{border-left-color:var(--sig)}
+.sup-card.falla{border-left-color:var(--nosig); background:var(--nosig-bg)}
+.sup-card.sindato{opacity:.92}
+.sc-cab{display:flex; align-items:flex-start; gap:10px; flex-wrap:wrap}
+.sc-marca{font-size:16px; flex:none; line-height:1.3}
+.sc-tit{flex:1; min-width:150px}
+.sc-tit b{font-family:var(--d); font-size:16px; display:block; line-height:1.25}
+.sc-tit code{font-size:12px; margin-top:3px; display:inline-block}
+.sc-grav{font-family:var(--m); font-size:10px; color:var(--ink3); flex:none; white-space:nowrap}
+.sc-valor{
+  display:flex; align-items:baseline; gap:9px; flex-wrap:wrap;
+  background:var(--card2); border-radius:8px; padding:8px 11px; margin:10px 0 8px;
+}
+.sc-valor b{font-family:var(--m); font-size:14px}
+.sc-veredicto{font-size:15.5px; line-height:1.5; margin-bottom:9px}
+.sc-detalle{display:grid; gap:8px; font-size:14.5px; line-height:1.45}
+.sc-detalle .et{font-family:var(--m); font-size:9px; letter-spacing:.13em; text-transform:uppercase; color:var(--ink3); display:block; margin-bottom:2px}
+.sc-crit{background:var(--blue-bg); border-radius:7px; padding:8px 11px}
+.sc-crit .et{color:var(--blue)}
+.sc-arreglo{background:var(--ochre-bg); border-radius:7px; padding:8px 11px}
+.sc-arreglo .et{color:var(--ochre)}
+.sup-nota{
+  background:var(--card2); border-radius:10px; padding:14px 16px; margin-top:20px;
+  font-size:15px; line-height:1.55; color:var(--ink2);
+}
+
 /* ───────────────────────── conceptos */
 .conc-cab{
   display:flex; align-items:center; justify-content:space-between; gap:14px; flex-wrap:wrap;

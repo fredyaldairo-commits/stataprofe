@@ -9,6 +9,7 @@ import { DOFILES, FAMILIAS_DO, textoCompleto } from './dofiles.js';
 import { clasificarY, sugerirX, armarPlan } from './guia.js';
 import { CONCEPTOS } from './conceptos.js';
 import * as Mem from './memoria.js';
+import { PRUEBAS, evaluarTodas, resumen as resumenPruebas } from './pruebas.js';
 import { preguntarGemini, tieneClave, guardarClave, borrarClave, probarClave, modeloElegido, listarModelos } from './gemini.js';
 import { esNulo, fmtG, fmtP, padI, corta } from './core/util.js';
 
@@ -665,6 +666,7 @@ function cambiarVista(v) {
   if (v === 'modelos') pintarModelos();
   if (v === 'empezar') pintarGuia();
   if (v === 'conceptos') pintarConceptos();
+  if (v === 'supuestos') pintarSupuestos();
   if (v === 'ayuda') pintarAyuda();
   if (v === 'consola') setTimeout(() => $('#entrada').focus(), 60);
 }
@@ -1024,6 +1026,86 @@ function correrBloque(texto) {
   }
   salida.scrollTop = salida.scrollHeight;
 }
+
+// ─────────────────────────────────────────────── supuestos: ¿pasa o no pasa?
+const ICONO = { alta: '🔴', media: '🟠', baja: '🟡' };
+const NOMBRE_GRAV = { alta: 'grave', media: 'importante', baja: 'menor' };
+
+function pintarSupuestos() {
+  const fit = ses.ultimoModelo;
+  const cont = $('#supCuerpo');
+  $('#supModelo').innerHTML = fit
+    ? `revisando: <code>${esc(fit.cmd)} ${esc(fit.depvar)} …</code> · ${fit.N} observaciones`
+    : 'corre un modelo y aquí te digo qué aprueba y qué no';
+
+  const ctx = { ds: ses.ds, fit, ultimosMargins: ses.ultimosMargins };
+  const ev = evaluarTodas(ctx);
+
+  // cabecera con el veredicto
+  let cabecera = '';
+  if (fit && ev.length) {
+    const r = resumenPruebas(ev);
+    const color = r.graves ? 'mal' : (r.fallan ? 'ojo' : 'ok');
+    cabecera = `<div class="sup-resumen ${color}">
+      <div class="sr-nota">${r.pasan}<span>/${r.total}</span></div>
+      <div class="sr-txt">
+        <b>${r.graves ? 'Hay algo grave que arreglar' : (r.fallan ? 'Casi listo' : 'Todo en orden')}</b>
+        <small>${r.pasan} pruebas aprobadas de ${r.total}.${
+          r.graves ? ` <strong>${r.graves} de las que fallan son graves:</strong> ${r.listaGraves.map((g) => esc(g.nombre)).join(', ')}.` :
+          r.fallan ? ' Lo que falla no es grave, pero conviene mencionarlo en el informe.' :
+          ' Puedes reportar este modelo con tranquilidad.'}</small>
+      </div>
+    </div>`;
+  } else if (!fit) {
+    cabecera = `<div class="sup-vacio">
+      <p><strong>Todavía no has corrido ningún modelo.</strong> Abajo está la lista completa en orden, con el criterio de cada prueba. Cuando corras un modelo, cada una se evalúa <u>sobre tus datos</u> y te digo si pasa o no.</p>
+      <div class="atajos">
+        <button class="sug" data-cmd="use enemdu_eloro_2024, clear">use enemdu_eloro_2024, clear</button>
+        <button class="sug" data-cmd="reg ingreso educ exper exper2 mujer horas, robust">reg ingreso educ exper exper2 mujer horas, robust</button>
+      </div></div>`;
+  }
+
+  // la lista: si hay modelo, con veredicto; si no, solo el criterio
+  const mostrar = fit && ev.length ? ev : PRUEBAS.map((p) => ({ ...p, resultado: null }));
+  let etapaActual = '';
+  const filas = mostrar.map((p) => {
+    let cabEtapa = '';
+    if (p.etapa !== etapaActual) { etapaActual = p.etapa; cabEtapa = `<div class="sup-etapa">${esc(p.etapa)}</div>`; }
+    const r = p.resultado;
+    const estado = !r ? 'sindato' : (r.paso === null ? 'sindato' : (r.paso ? 'pasa' : 'falla'));
+    const marca = estado === 'pasa' ? '✅' : estado === 'falla' ? '❌' : '○';
+    return cabEtapa + `<div class="sup-card ${estado}">
+      <div class="sc-cab">
+        <span class="sc-marca">${marca}</span>
+        <div class="sc-tit"><b>${p.n}. ${esc(p.nombre)}</b>
+          <code>${esc(p.comando)}</code></div>
+        <span class="sc-grav" title="${NOMBRE_GRAV[p.gravedad]}">${ICONO[p.gravedad]} ${NOMBRE_GRAV[p.gravedad]}</span>
+      </div>
+      ${r ? `<div class="sc-valor"><span class="et">Tu resultado</span><b>${r.valor}</b></div>
+             <div class="sc-veredicto">${r.texto}</div>` : ''}
+      <div class="sc-detalle">
+        <div><span class="et">Qué se mira</span>${p.mira}</div>
+        <div class="sc-crit"><span class="et">Criterio para aprobar</span>${p.criterio}</div>
+        <div><span class="et">Por qué importa</span>${p.porqueImporta}</div>
+        ${(!r || r.paso === false) ? `<div class="sc-arreglo"><span class="et">Si falla, qué hacer</span>${p.siFalla}</div>` : ''}
+      </div>
+    </div>`;
+  }).join('');
+
+  cont.innerHTML = `<div class="sup-doc">${cabecera}${filas}
+    <div class="sup-nota">
+      <b>El orden importa, y la gravedad también.</b> Las pruebas están en el orden en que se corren.
+      La <strong>forma funcional</strong> es la única que sesga los coeficientes: si esa falla, el número
+      que reportas no es el efecto real. La <strong>heterocedasticidad</strong> solo afecta los valores p
+      y se arregla con <code>robust</code>. La <strong>normalidad</strong> casi nunca importa con muestras grandes.
+    </div></div>`;
+}
+
+$('#btnRevisar').addEventListener('click', () => {
+  if (!ses.ultimoModelo) { toast('Corre un modelo primero'); cambiarVista('consola'); return; }
+  pintarSupuestos();
+  toast('Revisado sobre tu último modelo');
+});
 
 // ─────────────────────────────────────────────── conceptos (los porqués)
 let concActivo = CONCEPTOS[0].id;

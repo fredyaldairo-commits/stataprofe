@@ -35,6 +35,7 @@
   <button class="menu-btn" data-menu="graficos">Gráficos ▾</button>
   <button class="menu-btn" data-menu="estadisticas">Estadísticas ▾</button>
   <button class="tab" data-vista="modelos">Modelos</button>
+  <button class="tab" data-vista="supuestos">✅ Supuestos</button>
   <button class="tab" data-vista="conceptos">Conceptos</button>
   <button class="tab" data-vista="curso">Curso <span class="pip" id="pipCurso"></span></button>
   <button class="menu-btn" data-menu="ventana">Ventana ▾</button>
@@ -145,6 +146,18 @@
         <div class="filtro-fam" id="filtroFam"></div>
       </div>
       <div class="modelos-cuerpo" id="modelosCuerpo"></div>
+    </section>
+
+    <!-- ───────────────────────────── supuestos -->
+    <section class="vista" id="v-supuestos">
+      <div class="sup-cab">
+        <div>
+          <b>¿Pasa o no pasa?</b>
+          <small id="supModelo">corre un modelo y aquí te digo qué aprueba y qué no</small>
+        </div>
+        <button class="btn" id="btnRevisar">🔍 Revisar mi modelo</button>
+      </div>
+      <div class="sup-cuerpo" id="supCuerpo"></div>
     </section>
 
     <!-- ───────────────────────────── conceptos -->

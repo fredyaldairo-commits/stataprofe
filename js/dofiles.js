@@ -679,11 +679,26 @@ misstable summarize`),
       'Si una encuesta se digitó dos veces, esa persona pesa el doble en todos tus resultados. Primero se mira, después se borra.',
       `duplicates report
 duplicates drop`),
-    S('Números guardados como texto',
-      'ignore() quita los caracteres que estorban; force convierte en vacío lo que de plano no es número.',
-      `destring ingreso_txt, gen(ingreso) ignore(".,$ ") force
-label variable ingreso "Ingreso mensual (USD)"
+    S('Números guardados como texto: la regla del punto de miles',
+      'Aquí hay TRES formatos mezclados, como cuando digitan varias personas: "1.234,50" (punto de miles y coma decimal), "554,31" (solo coma) y "843.47" (punto decimal). Un destring a secas los arruina.',
+      `list ingreso_txt in 1/15
 
+* LA REGLA QUE LO RESUELVE: el punto solo es separador de miles cuando en
+* el MISMO número hay una coma. Si no hay coma, ese punto es el decimal.
+
+gen str20 ing_limpio = trim(ingreso_txt)
+
+* 1) quitar el punto de miles SOLO donde hay coma decimal
+replace ing_limpio = subinstr(ing_limpio, ".", "", .) ///
+        if strpos(ing_limpio, ",") > 0
+
+* 2) la coma decimal pasa a punto, que es lo que Stata entiende
+replace ing_limpio = subinstr(ing_limpio, ",", ".", .)
+
+destring ing_limpio, gen(ingreso) force
+drop ing_limpio
+
+label variable ingreso "Ingreso mensual (USD)"
 summarize ingreso
 count if missing(ingreso)`),
     S('Limpiar el texto antes de convertirlo',
@@ -696,10 +711,34 @@ tab sexo_txt`),
     S('Texto de categorías a número',
       'encode numera las categorías y les pone las etiquetas solo. Siempre necesita gen().',
       `encode sexo_txt, gen(sexo)
-tab sexo
+tab sexo`),
+    S('La trampa de encode con las ESCALAS',
+      'encode ordena ALFABÉTICAMENTE, no por la escala. Para satisfacción daría Feliz, Muy feliz, Muy triste, Normal, Triste: un desorden. Cuando la variable es una escala, el orden se arma a mano.',
+      `* así se ve el desorden que produce encode:
+encode satisf_txt, gen(satisf_alf)
+tab satisf_alf
+drop satisf_alf
 
-encode satisf_txt, gen(satisf)
-tab satisf`),
+* la forma correcta, fijando el orden de la escala:
+gen satisf = .
+replace satisf = 1 if satisf_txt == "Muy triste"
+replace satisf = 2 if satisf_txt == "Triste"
+replace satisf = 3 if satisf_txt == "Normal"
+replace satisf = 4 if satisf_txt == "Feliz"
+replace satisf = 5 if satisf_txt == "Muy feliz"
+
+label define lbl_sat 1 "Muy triste" 2 "Triste" 3 "Normal" ///
+                     4 "Feliz" 5 "Muy feliz"
+label values satisf lbl_sat
+label variable satisf "Satisfacción con la vida"
+
+tab satisf
+count if missing(satisf)`),
+    S('decode: el camino de vuelta',
+      'decode saca el texto de una variable numérica etiquetada. Sirve para exportar tablas a Word, donde quieres leer la palabra y no el código.',
+      `decode satisf, gen(satisf_palabra)
+list satisf satisf_palabra in 1/10
+drop satisf_palabra`),
     S('Códigos de no respuesta',
       'Si no los conviertes, Stata cree que hay gente con 99 años de estudio y el promedio sale absurdo. Cada variable puede tener su propio código.',
       `mvdecode edad educ, mv(99)
