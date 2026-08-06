@@ -258,7 +258,22 @@ export function interpretarLogit(fit, ame, ctx = {}) {
       tono: 'ojo',
       texto: 'Estás viendo <strong>razones de momios</strong> (odds ratio). Aquí el valor que significa "no pasa nada" es el <strong>1</strong>, no el 0: mayor a 1 ayuda, menor a 1 perjudica. Y una razón de 1,21 significa "21% más momios", <strong>no</strong> "21% más probabilidad" — son cosas distintas.',
     });
+    items.push({
+      tono: 'info',
+      texto: 'Qué son los <strong>momios</strong>: si de cada 100 personas 40 tienen empleo formal, la <em>probabilidad</em> es 40%, pero los <em>momios</em> son 40 contra 60, o sea 0,67. La probabilidad no puede pasar de 1; los momios no tienen techo. Por eso el modelo trabaja con momios y tú tienes que traducir de vuelta.',
+    });
   }
+
+  // el mapa de las cuatro escalas: es de lo que más se confunde
+  items.push({
+    tono: 'info',
+    texto: `<strong>Las cuatro formas de contar este mismo resultado</strong> (no son cuatro resultados, es uno en cuatro idiomas):<br>
+      · <strong>Coeficiente</strong> ${ctx.mostrarOR ? '(el crudo, que aquí no ves)' : 'de arriba'} → solo signo y significancia. Neutro = 0.<br>
+      · <strong>Razón de momios</strong> (<code>logistic</code>) → los momios se multiplican. Neutro = <strong>1</strong>.<br>
+      · <strong>Efecto marginal</strong> (<code>margins, dydx(*)</code>) → puntos de probabilidad. <strong>Este es el que va en tu texto.</strong><br>
+      · <strong>Media ajustada</strong> (<code>margins, at(...)</code>) → la probabilidad que tendría cada tipo de persona.<br>
+      Míralo completo en la pestaña <strong>Conceptos</strong>.`,
+  });
 
   if (tipo === 'probit') {
     items.push({ tono: 'info', texto: 'Probit y logit contestan lo mismo con una curva ligeramente distinta. Los coeficientes crudos <strong>no</strong> son comparables entre los dos modelos, pero los efectos marginales de <code>margins</code> sí, y casi siempre salen casi iguales.' });
@@ -558,6 +573,9 @@ export function interpretarPrueba(tipo, r, ctx = {}) {
     resumen = `Con el corte en ${r.cut}, el modelo acierta el <strong>${n2(r.correct * 100, 1)}%</strong> de los casos.`;
     items.push({ tono: 'info', texto: `<strong>Sensibilidad ${n2(r.sensitivity * 100, 1)}%</strong>: de todos los que en realidad <u>sí</u>, el modelo detecta ese porcentaje. <strong>Especificidad ${n2(r.specificity * 100, 1)}%</strong>: de todos los que en realidad <u>no</u>, acierta ese porcentaje.` });
     items.push({ tono: 'ojo', texto: 'Las dos se pelean entre sí: si bajas el punto de corte atrapas más casos positivos pero te equivocas más con los negativos. No existe un corte "correcto" — depende de qué error te sale más caro.' });
+    items.push({ tono: 'info', texto: `<strong>Los dos errores tienen nombre.</strong> Los ${r.fp} <strong>falsos positivos</strong> son falsas alarmas: el modelo dijo que sí y era no. Los ${r.fn} <strong>falsos negativos</strong> son casos que se le escaparon: dijo que no y era sí. Cuál de los dos te duele más es lo que decide dónde poner el corte.` });
+    items.push({ tono: 'info', texto: `<strong>Ojo con leer por fila o por columna.</strong> La sensibilidad y la especificidad se leen por <u>columna</u> (parten de lo que pasó de verdad). Los valores predictivos se leen por <u>fila</u> (parten de lo que el modelo dijo). Son preguntas distintas: aquí la sensibilidad es ${n2(r.sensitivity * 100, 1)}% pero cuando el modelo dice "sí" acierta el ${n2(r.ppv * 100, 1)}% de las veces.` });
+    items.push({ tono: 'info', texto: 'Para elegir el corte, corre <code>lsens</code>: el punto donde se cruzan las dos líneas es el que maximiza sensibilidad + especificidad (criterio de Youden). Si un error te cuesta más que el otro, muévelo a propósito y explica por qué en el informe.' });
     const tasa = (r.tp + r.fn) / r.N;
     const mayoria = Math.max(tasa, 1 - tasa);
     if (r.correct < mayoria + 0.02) {

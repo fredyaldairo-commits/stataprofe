@@ -7,6 +7,7 @@ import { MODULOS, NIVELES, INSIGNIAS, totalLecciones, nivelDe, buscarLeccion } f
 import { MODELOS_CATALOGO, PRIMOS, NIVELES_DIF, REGLA, SUPUESTOS_MCO } from './modelos.js';
 import { DOFILES, FAMILIAS_DO, textoCompleto } from './dofiles.js';
 import { clasificarY, sugerirX, armarPlan } from './guia.js';
+import { CONCEPTOS } from './conceptos.js';
 import { preguntarGemini, tieneClave, guardarClave, borrarClave, probarClave, modeloElegido, listarModelos } from './gemini.js';
 import { esNulo, fmtG, fmtP, padI, corta } from './core/util.js';
 
@@ -80,6 +81,7 @@ function nodoDe(b) {
     return d;
   }
   if (b.t === 'svg') { d.className = 'grafico'; d.innerHTML = b.svg; return d; }
+  if (b.t === 'html') { d.className = 'bloque-html'; d.innerHTML = b.html; return d; }
   if (b.t === 'profe') { return nodoProfe(b.bloque); }
   if (b.t === 'coef') { return nodoCoef(b.fit, b.opciones); }
   d.textContent = '';
@@ -651,6 +653,7 @@ function cambiarVista(v) {
   if (v === 'curso') pintarCurso();
   if (v === 'modelos') pintarModelos();
   if (v === 'empezar') pintarGuia();
+  if (v === 'conceptos') pintarConceptos();
   if (v === 'ayuda') pintarAyuda();
   if (v === 'consola') setTimeout(() => $('#entrada').focus(), 60);
 }
@@ -1009,6 +1012,39 @@ function correrBloque(texto) {
     if (res.some((x) => x.t === 'err')) break;
   }
   salida.scrollTop = salida.scrollHeight;
+}
+
+// ─────────────────────────────────────────────── conceptos (los porqués)
+let concActivo = CONCEPTOS[0].id;
+
+function pintarConceptos() {
+  $('#concNav').innerHTML = CONCEPTOS.map((c) =>
+    `<button class="conc-chip ${c.id === concActivo ? 'on' : ''}" data-c="${c.id}">${c.icono} ${esc(c.titulo)}</button>`).join('');
+  $$('#concNav .conc-chip').forEach((b) => b.addEventListener('click', () => {
+    concActivo = b.dataset.c;
+    pintarConceptos();
+    $('#concCuerpo').scrollTop = 0;
+  }));
+
+  const c = CONCEPTOS.find((x) => x.id === concActivo) || CONCEPTOS[0];
+  $('#concCuerpo').innerHTML = `<div class="conc-doc">
+    <div class="conc-titulo"><span class="ci">${c.icono}</span><h1>${esc(c.titulo)}</h1></div>
+    <div class="conc-gancho">${esc(c.gancho)}</div>
+    ${c.secciones.map((s) => `
+      <section class="conc-sec">
+        <h2>${esc(s.titulo)}</h2>
+        ${s.cuerpo}
+        ${s.ojo ? `<div class="conc-ojo"><span class="et">Ojo con esto</span>${s.ojo}</div>` : ''}
+      </section>`).join('')}
+    ${(c.comandos || []).length ? `<div class="conc-probar">
+      <span class="et">Pruébalo tú misma</span>
+      <div class="conc-cmds">${c.comandos.map((cm) => `<button class="sug" data-cmd="${esc(cm)}">${esc(cm)}</button>`).join('')}</div>
+      <button class="btn" id="btnConcTodo">▶ Correr toda la secuencia</button>
+    </div>` : ''}
+  </div>`;
+
+  const bt = $('#btnConcTodo');
+  if (bt) bt.addEventListener('click', () => correrBloque(c.comandos.join('\n')));
 }
 
 // ─────────────────────────────────────────────── ayuda
@@ -1507,6 +1543,18 @@ function msgChat(quien, texto) {
   const d = document.createElement('div');
   d.className = 'msg ' + quien;
   d.innerHTML = texto;
+  // los comandos que menciona el profe se pueden tocar para llevarlos a la consola
+  d.querySelectorAll('code').forEach((c) => {
+    const cmd = c.textContent.trim();
+    if (!/^[a-z]/i.test(cmd)) return;
+    c.title = 'Tocar para escribirlo en la consola';
+    c.addEventListener('click', () => {
+      cambiarVista('consola');
+      $('#entrada').value = cmd;
+      $('#entrada').focus();
+      toast('Comando listo en la consola');
+    });
+  });
   $('#chatMsgs').appendChild(d);
   $('#chatMsgs').scrollTop = $('#chatMsgs').scrollHeight;
   return d;

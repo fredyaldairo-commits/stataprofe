@@ -6,7 +6,7 @@ import * as M from './models.js';
 import * as F from './format.js';
 import * as G from './graphs.js';
 import * as Prof from '../professor.js';
-import { esNulo, padI, padD, corta, fmtG, fmtP, masParecido } from './util.js';
+import { esNulo, padI, padD, corta, fmtG, fmtP, masParecido, esc as esc2 } from './util.js';
 
 function exigeDatos(ses) {
   if (!ses.ds.cargado) {
@@ -744,6 +744,49 @@ registrarComando('estat', (p, ses) => {
     ses.txt(`  Valor predictivo negativo                          ${(t.npv * 100).toFixed(2)}%`);
     ses.txt(`  ------------------------------------------------------------`);
     ses.txt(`  Correctamente clasificados                         ${(t.correct * 100).toFixed(2)}%`);
+
+    const et = (v) => ses.ds.etiquetaDe(fit.depvar, v) || (v ? 'Sí' : 'No');
+    const pct = (x) => ((x / t.N) * 100).toFixed(1) + '%';
+    ses.html(`<div class="confu">
+      <div class="confu-tit">Qué acertó y qué se equivocó, casilla por casilla</div>
+      <div class="confu-grid">
+        <div class="confu-esq"></div>
+        <div class="confu-cabcol">Realidad: <b>${esc2(et(1))}</b></div>
+        <div class="confu-cabcol">Realidad: <b>${esc2(et(0))}</b></div>
+
+        <div class="confu-cabfila">El modelo<br>dice <b>sí</b></div>
+        <div class="confu-cel bien">
+          <div class="cn">${t.tp}</div><div class="cq">Verdaderos positivos</div>
+          <div class="cd">Acertó: dijo que sí y era sí</div><div class="cp">${pct(t.tp)}</div>
+        </div>
+        <div class="confu-cel mal">
+          <div class="cn">${t.fp}</div><div class="cq">Falsos positivos</div>
+          <div class="cd">Se equivocó: dijo que sí, pero era no. Es una <strong>falsa alarma</strong>.</div><div class="cp">${pct(t.fp)}</div>
+        </div>
+
+        <div class="confu-cabfila">El modelo<br>dice <b>no</b></div>
+        <div class="confu-cel mal">
+          <div class="cn">${t.fn}</div><div class="cq">Falsos negativos</div>
+          <div class="cd">Se equivocó: dijo que no, pero era sí. Es un caso que <strong>se le escapó</strong>.</div><div class="cp">${pct(t.fn)}</div>
+        </div>
+        <div class="confu-cel bien">
+          <div class="cn">${t.tn}</div><div class="cq">Verdaderos negativos</div>
+          <div class="cd">Acertó: dijo que no y era no</div><div class="cp">${pct(t.tn)}</div>
+        </div>
+      </div>
+      <div class="confu-medidas">
+        <div class="cm"><b>Sensibilidad ${(t.sensitivity * 100).toFixed(1)}%</b>
+          <small>De los ${t.tp + t.fn} que <u>sí</u> eran, atrapó ${t.tp}. Mira la <strong>columna</strong> de la izquierda.</small></div>
+        <div class="cm"><b>Especificidad ${(t.specificity * 100).toFixed(1)}%</b>
+          <small>De los ${t.fp + t.tn} que <u>no</u> eran, acertó ${t.tn}. Mira la <strong>columna</strong> de la derecha.</small></div>
+        <div class="cm"><b>Valor predictivo + ${(t.ppv * 100).toFixed(1)}%</b>
+          <small>De las ${t.tp + t.fp} veces que dijo "sí", acertó ${t.tp}. Mira la <strong>fila</strong> de arriba.</small></div>
+        <div class="cm"><b>Valor predictivo − ${(t.npv * 100).toFixed(1)}%</b>
+          <small>De las ${t.fn + t.tn} veces que dijo "no", acertó ${t.tn}. Mira la <strong>fila</strong> de abajo.</small></div>
+      </div>
+      <div class="confu-nota">La diferencia entre sensibilidad y valor predictivo es que una lee por <strong>columna</strong> (parte de lo que pasó de verdad) y la otra por <strong>fila</strong> (parte de lo que el modelo dijo). Es la confusión más común de todas.</div>
+    </div>`);
+
     ses.profe(Prof.interpretarPrueba('clasificacion', t, { ds: ses.ds, fit }));
     return;
   }

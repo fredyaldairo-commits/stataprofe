@@ -42,6 +42,8 @@ export class Sesion {
     });
   }
   svg(svg, titulo) { this.emitir({ t: 'svg', svg, titulo: titulo || '' }); }
+  /** Bloque de HTML propio (tablas visuales, esquemas). */
+  html(h, titulo) { this.emitir({ t: 'html', html: h, titulo: titulo || '' }); }
   profe(bloque) { this.emitir({ t: 'profe', bloque }); }
   profeTexto(titulo, items) { this.profe({ titulo, items }); }
   /** Tabla de coeficientes que la interfaz vuelve clickeable. */

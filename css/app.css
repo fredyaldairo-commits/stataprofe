@@ -283,6 +283,38 @@ main{flex:1; min-height:0; position:relative}
 .profe-frases li{font-size:15px; margin-bottom:6px; color:var(--ink2)}
 .profe-frases ul{margin:0; padding-left:1.1em}
 
+/* matriz de confusión y otros bloques visuales */
+.bloque-html{margin:10px 0}
+.confu{background:var(--card); border:1px solid var(--line); border-radius:var(--r); padding:14px 16px}
+.confu-tit{font-family:var(--d); font-weight:800; font-size:16px; margin-bottom:11px}
+.confu-grid{display:grid; grid-template-columns:78px 1fr 1fr; gap:6px; align-items:stretch}
+.confu-esq{}
+.confu-cabcol,.confu-cabfila{
+  font-family:var(--m); font-size:11px; color:var(--ink3); display:flex;
+  align-items:center; justify-content:center; text-align:center; line-height:1.3;
+}
+.confu-cabfila{justify-content:flex-end; text-align:right; padding-right:4px}
+.confu-cabcol b,.confu-cabfila b{color:var(--ink); font-family:var(--d); font-size:12.5px}
+.confu-cel{border-radius:9px; padding:10px 12px; border:1px solid var(--line)}
+.confu-cel.bien{background:var(--sig-bg); border-color:var(--sig)}
+.confu-cel.mal{background:var(--nosig-bg); border-color:var(--nosig)}
+.confu-cel .cn{font-family:var(--d); font-weight:800; font-size:22px; line-height:1.1}
+.confu-cel.bien .cn{color:var(--sig)}
+.confu-cel.mal .cn{color:var(--nosig)}
+.confu-cel .cq{font-family:var(--m); font-size:10px; letter-spacing:.05em; text-transform:uppercase; color:var(--ink3); margin:2px 0 5px}
+.confu-cel .cd{font-size:14px; line-height:1.4; color:var(--ink2)}
+.confu-cel .cp{font-family:var(--m); font-size:11px; color:var(--ink3); margin-top:5px}
+.confu-medidas{display:grid; grid-template-columns:repeat(auto-fit,minmax(210px,1fr)); gap:7px; margin-top:12px}
+.confu-medidas .cm{background:var(--card2); border-radius:8px; padding:9px 11px}
+.confu-medidas .cm b{font-family:var(--d); font-size:14.5px; display:block}
+.confu-medidas .cm small{font-size:13px; color:var(--ink3); line-height:1.4; display:block; margin-top:2px}
+.confu-nota{margin-top:10px; background:var(--ochre-bg); border-left:3px solid var(--ochre); border-radius:0 8px 8px 0; padding:10px 12px; font-size:14.5px}
+@media(max-width:640px){
+  .confu-grid{grid-template-columns:1fr}
+  .confu-cabfila{justify-content:flex-start; text-align:left; padding:6px 0 0}
+  .confu-esq{display:none}
+}
+
 .grafico{background:var(--card); border:1px solid var(--line); border-radius:var(--r); padding:10px; margin:10px 0}
 .grafico svg{display:block; width:100%; height:auto}
 
@@ -663,6 +695,50 @@ table.datos td.num{text-align:right}
 .guia-alt .a:hover{border-color:var(--blue); color:var(--ink)}
 .guia-acciones{display:flex; gap:8px; flex-wrap:wrap; margin-top:14px}
 
+/* ───────────────────────── conceptos */
+.conc-cab{
+  display:flex; align-items:center; justify-content:space-between; gap:14px; flex-wrap:wrap;
+  padding:11px 16px; border-bottom:1px solid var(--line); background:var(--card); flex:none;
+}
+.conc-cab b{font-family:var(--d); font-size:15.5px}
+.conc-cab small{display:block; color:var(--ink3); font-size:13px}
+.conc-nav{display:flex; gap:5px; flex-wrap:wrap}
+.conc-chip{
+  font-size:12.5px; background:var(--card2); color:var(--ink2);
+  border:1px solid var(--line); border-radius:99px; padding:6px 12px;
+}
+.conc-chip.on{background:var(--blue); color:#fff; border-color:var(--blue)}
+.conc-cuerpo{flex:1; overflow-y:auto; padding:20px 16px 60px}
+.conc-doc{max-width:74ch; margin:0 auto}
+.conc-titulo{display:flex; align-items:center; gap:12px; margin-bottom:10px}
+.conc-titulo .ci{font-size:30px}
+.conc-titulo h1{font-size:clamp(22px,3.4vw,29px)}
+.conc-gancho{
+  font-size:17px; color:var(--ink2); background:var(--blue-bg); border-left:3px solid var(--blue);
+  border-radius:0 10px 10px 0; padding:13px 16px; margin-bottom:20px; line-height:1.5;
+}
+.conc-sec{margin-bottom:24px}
+.conc-sec h2{font-size:19px; margin-bottom:9px; padding-top:6px; border-top:1px solid var(--line2)}
+.conc-sec p{font-size:16.5px; line-height:1.6}
+.conc-sec ul,.conc-sec ol{padding-left:1.25em; margin:.5em 0 1em}
+.conc-sec li{margin-bottom:.45em; font-size:16.5px; line-height:1.55}
+.conc-sec table{width:100%; border-collapse:collapse; font-size:14.5px; margin:12px 0}
+.conc-sec th{
+  font-family:var(--m); font-size:10px; letter-spacing:.08em; text-transform:uppercase;
+  color:var(--ink3); text-align:left; padding:8px 10px; border-bottom:1.5px solid var(--ink3); vertical-align:bottom;
+}
+.conc-sec td{padding:9px 10px; border-bottom:1px solid var(--line2); vertical-align:top; line-height:1.45}
+.conc-sec td small{color:var(--ink3); font-size:12.5px}
+.conc-sec tr:hover td{background:var(--card2)}
+.conc-ojo{
+  background:var(--ochre-bg); border-left:3px solid var(--ochre); border-radius:0 9px 9px 0;
+  padding:12px 14px; margin:12px 0; font-size:16px; line-height:1.5;
+}
+.conc-ojo .et{font-family:var(--m); font-size:9.5px; letter-spacing:.13em; text-transform:uppercase; color:var(--ochre); display:block; margin-bottom:5px}
+.conc-probar{background:var(--card); border:1px solid var(--line); border-radius:11px; padding:14px 16px; margin-top:24px}
+.conc-probar .et{font-family:var(--m); font-size:9.5px; letter-spacing:.13em; text-transform:uppercase; color:var(--ink3); display:block; margin-bottom:8px}
+.conc-cmds{display:flex; flex-wrap:wrap; gap:6px; margin-bottom:11px}
+
 /* ───────────────────────── ayuda */
 .ayuda-cuerpo{flex:1; overflow-y:auto; padding:18px 18px 50px}
 .ayuda-cuerpo .doc{max-width:70ch; margin:0 auto}
@@ -698,21 +774,44 @@ table.datos td.num{text-align:right}
 }
 .fab:active{transform:scale(.93)}
 .chat{
-  position:fixed; right:16px; bottom:76px; width:min(390px,92vw); height:min(520px,72vh);
+  position:fixed; right:16px; bottom:76px; width:min(430px,92vw); height:min(620px,78vh);
   background:var(--card); border:1px solid var(--line); border-radius:14px;
   box-shadow:0 18px 50px rgba(0,0,0,.32); display:none; flex-direction:column; z-index:70;
 }
 .chat.abierto{display:flex}
 .chat-cab{display:flex; justify-content:space-between; align-items:center; padding:12px 15px; border-bottom:1px solid var(--line); font-family:var(--d)}
 .chat-x{background:none; border:0; color:var(--ink3); font-size:15px}
-.chat-msgs{flex:1; overflow-y:auto; padding:12px 14px; display:flex; flex-direction:column; gap:9px}
-.msg{padding:10px 13px; border-radius:12px; font-size:15.5px; line-height:1.5; max-width:88%}
+.chat-msgs{
+  flex:1; min-height:0; overflow-y:auto; padding:12px 14px;
+  display:flex; flex-direction:column; gap:9px; overscroll-behavior:contain;
+}
+.msg{
+  /* flex:none es lo importante: sin esto los mensajes se APLASTAN unos a otros
+     a medida que llegan más, y el texto se corta a media línea */
+  flex:none;
+  padding:10px 13px; border-radius:12px; font-size:15.5px; line-height:1.55;
+  max-width:88%; overflow-wrap:anywhere; word-break:break-word;
+}
 .msg.yo{background:var(--blue-bg); align-self:flex-end; border-bottom-right-radius:4px}
 .msg.profe{background:var(--card2); align-self:flex-start; border-bottom-left-radius:4px}
 .msg.pensando{color:var(--ink3); font-style:italic}
+.msg ul,.msg ol{margin:.4em 0; padding-left:1.15em}
+.msg li{margin-bottom:.3em}
+.msg code{
+  background:var(--term-bg); color:var(--term-ink); border:0; font-size:.88em;
+  padding:.15em .4em; border-radius:4px; cursor:pointer; display:inline-block;
+  max-width:100%; overflow-wrap:anywhere;
+}
+.msg code:hover{outline:1px solid var(--blue)}
+.msg strong{font-weight:600}
 .chat-form{display:flex; gap:7px; padding:11px 13px; border-top:1px solid var(--line)}
 .chat-form input{flex:1; min-width:0; font-family:var(--b); font-size:15px; padding:10px 12px; border:1px solid var(--line); border-radius:9px; background:var(--card2); color:var(--ink)}
 .chat-form button{background:var(--blue); color:#fff; border:0; border-radius:9px; padding:0 16px; font-size:17px}
+/* en pantallas chicas el chat ocupa casi todo, si no no se lee nada */
+@media(max-width:620px){
+  .chat{right:8px; left:8px; bottom:8px; width:auto; height:min(86vh, 640px)}
+  .fab{right:12px; bottom:70px}
+}
 
 /* toast */
 .toast{
