@@ -4,7 +4,34 @@
 //
 // Para activarla, en Vercel: Settings → Environment Variables → GEMINI_API_KEY
 
-const MODELO = 'gemini-2.5-flash';
+// El nombre del modelo no va fijo: Google los renombra y los retira cada pocos
+// meses, y un nombre viejo devuelve 404. Se pide la lista y se elige uno vivo.
+const BASE = 'https://generativelanguage.googleapis.com/v1beta';
+const PREFERENCIAS = ['flash-latest', 'flash', 'pro-latest', 'pro'];
+let modeloCache = null;
+
+async function elegirModelo(clave) {
+  if (modeloCache) return modeloCache;
+  const r = await fetch(`${BASE}/models?key=${clave}&pageSize=200`);
+  if (!r.ok) throw new Error('no se pudo consultar la lista de modelos');
+  const j = await r.json();
+  const modelos = (j.models || [])
+    .filter((m) => (m.supportedGenerationMethods || []).includes('generateContent'))
+    .map((m) => String(m.name || '').replace(/^models\//, ''))
+    .filter((n) => !/embed|aqa|imagen|veo|tts|image|audio|native-audio|live/i.test(n));
+  if (!modelos.length) throw new Error('no hay modelos de texto disponibles para esta clave');
+  for (const pref of PREFERENCIAS) {
+    const cand = modelos.filter((n) => n.includes(pref));
+    if (cand.length) {
+      cand.sort((a, b) => a.length - b.length || a.localeCompare(b));
+      modeloCache = cand[0];
+      return modeloCache;
+    }
+  }
+  modelos.sort((a, b) => a.length - b.length);
+  modeloCache = modelos[0];
+  return modeloCache;
+}
 
 export default async function handler(req, res) {
   const clave = process.env.GEMINI_API_KEY;
@@ -27,8 +54,9 @@ export default async function handler(req, res) {
     const texto = JSON.stringify(cuerpo || {});
     if (texto.length > 24000) return res.status(413).json({ error: 'la consulta es demasiado larga' });
 
+    const modelo = await elegirModelo(clave);
     const r = await fetch(
-      `https://generativelanguage.googleapis.com/v1beta/models/${MODELO}:generateContent?key=${clave}`,
+      `${BASE}/models/${modelo}:generateContent?key=${clave}`,
       {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },

@@ -7,7 +7,7 @@ import { MODULOS, NIVELES, INSIGNIAS, totalLecciones, nivelDe, buscarLeccion } f
 import { MODELOS_CATALOGO, PRIMOS, NIVELES_DIF, REGLA, SUPUESTOS_MCO } from './modelos.js';
 import { DOFILES, FAMILIAS_DO, textoCompleto } from './dofiles.js';
 import { clasificarY, sugerirX, armarPlan } from './guia.js';
-import { preguntarGemini, tieneClave, guardarClave, borrarClave, probarClave } from './gemini.js';
+import { preguntarGemini, tieneClave, guardarClave, borrarClave, probarClave, modeloElegido, listarModelos } from './gemini.js';
 import { esNulo, fmtG, fmtP, padI, corta } from './core/util.js';
 
 const $ = (s) => document.querySelector(s);
@@ -1426,7 +1426,10 @@ $('#btnReiniciar').addEventListener('click', () => {
 // ajustes
 $('#btnAjustes').addEventListener('click', () => {
   $('#modalAjustes').classList.add('abierto');
-  $('#estadoClave').textContent = tieneClave() ? '✅ Hay una clave guardada en este dispositivo.' : 'Sin clave: el chat libre está desactivado (el resto funciona igual).';
+  const m = modeloElegido();
+  $('#estadoClave').innerHTML = tieneClave()
+    ? `✅ Hay una clave guardada en este dispositivo.${m ? ` Modelo en uso: <code>${esc(m)}</code>.` : ' Dale a <strong>Probar</strong> para buscar el modelo.'}`
+    : 'Sin clave: el chat libre está desactivado (el resto funciona igual).';
   $('#chkGrande').checked = leer(K.grande, false);
   $('#chkProfe').checked = verProfe;
   $('#chkPaneles').checked = !$('#panelVariables').classList.contains('oculto');
@@ -1449,9 +1452,22 @@ $('#btnGuardarClave').addEventListener('click', () => {
   toast('Clave guardada');
 });
 $('#btnProbarClave').addEventListener('click', async () => {
-  $('#estadoClave').textContent = 'Probando…';
+  const est = $('#estadoClave');
+  est.innerHTML = 'Probando… (primero busco qué modelos tiene tu clave)';
   const r = await probarClave();
-  $('#estadoClave').textContent = r.ok ? '✅ Funciona: ya puedes usar el chat.' : '❌ ' + r.error;
+  if (r.ok) {
+    est.innerHTML = `✅ Funciona. Estoy usando el modelo <code>${esc(r.modelo)}</code>.<br>
+      <span style="color:var(--ink3)">Respuesta de prueba: "${esc(r.muestra)}"</span>`;
+    toast('Gemini conectado: ' + r.modelo);
+    return;
+  }
+  est.innerHTML = `❌ ${esc(r.error)}`;
+  // si la clave sirve pero falla otra cosa, mostrar qué modelos hay
+  try {
+    const lista = await listarModelos();
+    est.innerHTML += `<br><span style="color:var(--ink3)">Tu clave sí ve ${lista.length} modelos: ${
+      esc(lista.slice(0, 5).join(', '))}${lista.length > 5 ? '…' : ''}</span>`;
+  } catch { /* la clave no sirve ni para listar */ }
 });
 $('#btnBorrarClave').addEventListener('click', () => {
   borrarClave();
