@@ -707,11 +707,19 @@ registrarComando('estat', (p, ses) => {
   if (sub === 'ovtest') {
     if (fit.link !== 'identity') throw new ErrorStata('estat ovtest solo va después de regress', 301, null);
     const r = M.resetTest(fit);
+    if (r.error || isNaN(r.F)) {
+      throw new ErrorStata('no se pudo calcular la prueba RESET', 198,
+        'Las potencias de los valores ajustados salen casi idénticas entre sí, así que la prueba no se puede estimar. Pasa cuando el modelo tiene muy pocas variables o predice un rango muy estrecho. Revisa la forma funcional a ojo con <code>rvfplot</code>.');
+    }
     ses.txt('Prueba RESET de Ramsey de variables omitidas');
     ses.txt('Hipótesis nula: el modelo no tiene variables omitidas ni forma funcional equivocada');
+    ses.txt(`Potencias de los valores ajustados usadas: ${r.potencias.join(', ')}`);
     ses.txt('');
     ses.txt(`       F(${r.df1}, ${r.df2}) =   ${r.F.toFixed(2)}`);
     ses.txt(`            Prob > F =   ${r.p.toFixed(4)}`);
+    if (r.reducida) {
+      ses.aviso(`Normalmente esta prueba usa los cuadrados, cubos y cuartas potencias del valor ajustado. Aquí solo se pudo usar ${r.potencias.join(' y ')}: las demás salían casi idénticas entre sí y el cálculo no se sostenía. El resultado sigue siendo válido, solo con menos grados de libertad.`);
+    }
     ses.profe(Prof.interpretarPrueba('ovtest', r, { ds: ses.ds, fit }));
     return;
   }

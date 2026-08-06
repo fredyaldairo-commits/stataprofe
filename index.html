@@ -28,6 +28,7 @@
 
 <!-- ═══════════════════ barra de menús ═══════════════════ -->
 <nav class="menu-barra" id="tabs">
+  <button class="tab" data-vista="empezar">✨ Empezar</button>
   <button class="tab activa" data-vista="consola">Consola</button>
   <button class="tab" data-vista="dofile">Do-file</button>
   <button class="tab" data-vista="datos">Datos</button>
@@ -60,6 +61,11 @@
 
   <!-- centro -->
   <main>
+    <!-- ───────────────────────────── empezar (modo guiado) -->
+    <section class="vista" id="v-empezar">
+      <div class="guia-cuerpo" id="guiaCuerpo"></div>
+    </section>
+
     <!-- ───────────────────────────── consola -->
     <section class="vista activa" id="v-consola">
       <div class="salida" id="salida">

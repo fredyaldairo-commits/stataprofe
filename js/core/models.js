@@ -889,12 +889,29 @@ export function whiteTest(fit) {
 
 export function resetTest(fit) {
   const yhat = fit.yhat;
-  const Z = fit.X.map((f, i) => [...f, yhat[i] ** 2, yhat[i] ** 3, yhat[i] ** 4]);
-  const nombres = [...fit.xnames, '_yhat2', '_yhat3', '_yhat4'];
-  const aux = ols(Z, fit.y, { names: nombres });
-  const dfNum = 3;
-  const F = ((fit.rss - aux.rss) / dfNum) / (aux.rss / aux.df_r);
-  return { F, df1: dfNum, df2: aux.df_r, p: pF(F, dfNum, aux.df_r) };
+  // Las potencias de yhat pueden salir casi colineales entre sí (pasa cuando el
+  // modelo tiene pocas variables o yhat varía poco). Si la de grado 4 no se
+  // puede estimar, se baja a 3 y después a 2, y se ajustan los grados de libertad.
+  let ultimoError = null;
+  for (const potencias of [[2, 3, 4], [2, 3], [2]]) {
+    try {
+      const Z = fit.X.map((f, i) => [...f, ...potencias.map((p) => yhat[i] ** p)]);
+      const nombres = [...fit.xnames, ...potencias.map((p) => `_yhat${p}`)];
+      const aux = ols(Z, fit.y, { names: nombres });
+      // solo cuentan las potencias que sobrevivieron a la colinealidad
+      const agregadas = potencias.filter((p) => !aux.omitted.includes(`_yhat${p}`));
+      const dfNum = agregadas.length;
+      if (!dfNum) { ultimoError = new Error('las potencias son colineales'); continue; }
+      const F = ((fit.rss - aux.rss) / dfNum) / (aux.rss / aux.df_r);
+      if (!isFinite(F)) { ultimoError = new Error('F no finito'); continue; }
+      return {
+        F, df1: dfNum, df2: aux.df_r, p: pF(F, dfNum, aux.df_r),
+        potencias: agregadas,
+        reducida: agregadas.length < 3,
+      };
+    } catch (e) { ultimoError = e; }
+  }
+  return { F: NaN, df1: 0, df2: fit.df_r, p: NaN, error: (ultimoError && ultimoError.message) || 'no se pudo calcular' };
 }
 
 export function linktest(fit) {

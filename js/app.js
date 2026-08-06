@@ -6,6 +6,7 @@ import { CATALOGO } from './data/datasets.js';
 import { MODULOS, NIVELES, INSIGNIAS, totalLecciones, nivelDe, buscarLeccion } from './curriculum.js';
 import { MODELOS_CATALOGO, PRIMOS, NIVELES_DIF, REGLA, SUPUESTOS_MCO } from './modelos.js';
 import { DOFILES, FAMILIAS_DO, textoCompleto } from './dofiles.js';
+import { clasificarY, sugerirX, armarPlan } from './guia.js';
 import { preguntarGemini, tieneClave, guardarClave, borrarClave, probarClave } from './gemini.js';
 import { esNulo, fmtG, fmtP, padI, corta } from './core/util.js';
 
@@ -649,6 +650,7 @@ function cambiarVista(v) {
   if (v === 'datos') pintarDatos();
   if (v === 'curso') pintarCurso();
   if (v === 'modelos') pintarModelos();
+  if (v === 'empezar') pintarGuia();
   if (v === 'ayuda') pintarAyuda();
   if (v === 'consola') setTimeout(() => $('#entrada').focus(), 60);
 }
@@ -744,6 +746,146 @@ function parsearCSV(texto, nombre) {
     }
   });
   return { nombre, n: filas.length, vars, data, valueLabels: {}, notas: `Archivo subido por ti: ${nombre}` };
+}
+
+// ─────────────────────────────────────────────── modo guiado "no sé por dónde empezar"
+const guia = { y: null, clas: null, xs: [] };
+
+function pintarGuia() {
+  const c = $('#guiaCuerpo');
+  const partes = [`<div class="guia-doc">
+    <div class="guia-hola">
+      <h1>¿No sabes por dónde empezar?</h1>
+      <p>Dime qué quieres explicar y yo miro <strong>tus datos de verdad</strong> para decirte qué modelo va, por qué, y qué escribir. Después te acompaño paso a paso.</p>
+    </div>`];
+
+  // ── paso 1: la base
+  if (!ses.ds.cargado) {
+    partes.push(`<div class="guia-paso">
+      <div class="gp-cab"><span class="gp-n">1</span><b>Primero abre una base</b></div>
+      <div class="gp-ayuda">Elige con cuál quieres trabajar. Si tienes tus propios datos, usa el botón <strong>📤 Abrir</strong> de arriba para subir un CSV.</div>
+      <div class="gp-opciones">${CATALOGO.map((b) => `
+        <button class="gp-op" data-base="${esc(b.nombre)}">
+          <b>${esc(b.nombre)}</b><small>${esc(b.desc)}</small>
+          <span class="tipo">${b.obs} observaciones</span></button>`).join('')}</div>
+    </div></div>`);
+    c.innerHTML = partes.join('');
+    c.querySelectorAll('[data-base]').forEach((el) => el.addEventListener('click', () => {
+      correr(`use ${el.dataset.base}, clear`, $('#salida'), { eco: false });
+      guia.y = null; guia.clas = null; guia.xs = [];
+      pintarGuia();
+      toast(`Base abierta: ${ses.ds.n} observaciones`);
+    }));
+    return;
+  }
+
+  partes.push(`<div class="guia-paso">
+    <div class="gp-cab"><span class="gp-n">✓</span><b>Base abierta: ${esc(ses.ds.nombre)}</b></div>
+    <div class="gp-ayuda">${ses.ds.n} observaciones y ${ses.ds.vars.length} variables. Si quieres otra, ábrela desde la pestaña Consola con <code>use</code>.</div>
+  </div>`);
+
+  // ── paso 2: qué quiere explicar
+  const candidatas = ses.ds.vars.filter((v) => !['id', 'hogar', 'empresa'].includes(v.name));
+  partes.push(`<div class="guia-paso">
+    <div class="gp-cab"><span class="gp-n">2</span><b>¿Qué quieres explicar?</b></div>
+    <div class="gp-ayuda">Esta es la variable que va del lado izquierdo, la que quieres entender. <strong>Solo esto decide qué modelo va.</strong></div>
+    <div class="gp-opciones">${candidatas.map((v) => `
+      <button class="gp-op ${guia.y === v.name ? 'marcada' : ''}" data-y="${esc(v.name)}">
+        <b>${esc(v.name)}</b><small>${esc(v.label || '')}</small></button>`).join('')}</div>
+  </div>`);
+
+  // ── paso 3: el veredicto
+  if (guia.clas) {
+    const k = guia.clas;
+    if (!k.puedeSerY) {
+      partes.push(`<div class="guia-paso">
+        <div class="gp-cab"><span class="gp-n">3</span><b>Esta variable todavía no sirve</b></div>
+        <div class="veredicto"><div class="vt">${esc(k.titulo)}</div><div class="vp">${k.porque}</div></div>
+        <div class="guia-arreglo">${k.arreglo.texto}<pre>${esc(k.arreglo.comando)}</pre>
+          <div class="guia-acciones"><button class="btn" data-correr="${esc(k.arreglo.comando)}">▶ Arreglarlo ahora</button></div></div>
+      </div>`);
+    } else {
+      partes.push(`<div class="guia-paso">
+        <div class="gp-cab"><span class="gp-n">3</span><b>Entonces te toca este modelo</b></div>
+        <div class="veredicto">
+          <div class="vt">${esc(k.titulo)}</div>
+          <div class="vp">${k.porque}</div>
+          <span class="vmod"><span class="vn">${k.numeroModelo}</span>${esc(k.modelo)}</span>
+        </div>
+        ${k.ojo ? `<div class="guia-ojo"><strong>Ojo:</strong> ${k.ojo}</div>` : ''}
+        ${k.arreglo ? `<div class="guia-arreglo">${k.arreglo.texto}<pre>${esc(k.arreglo.comando)}</pre>
+          <div class="guia-acciones"><button class="btn sec" data-correr="${esc(k.arreglo.comando.split('\n')[0])}">▶ Hacerlo ahora</button></div></div>` : ''}
+        ${(k.alternativas || []).length ? `<div class="gp-ayuda" style="margin-top:10px">También podrías usar:</div>
+          <div class="guia-alt">${k.alternativas.map((a) => `<button class="a" data-ir="${a.n}">${esc(a.nombre)} — ${esc(a.cuando)}</button>`).join('')}</div>` : ''}
+        <div class="gp-ayuda" style="margin-top:10px">${k.faltan ? `Ojo: <code>${esc(guia.y)}</code> tiene <strong>${k.faltan} valores faltantes</strong> que van a quedar fuera del modelo.` : `Sin valores faltantes: entran las ${k.n} observaciones.`}</div>
+      </div>`);
+
+      // ── paso 4: con qué
+      const sug = sugerirX(ses.ds, guia.y);
+      partes.push(`<div class="guia-paso">
+        <div class="gp-cab"><span class="gp-n">4</span><b>¿Con qué lo quieres explicar?</b></div>
+        <div class="gp-ayuda">Marca las que creas que influyen. Mete las que la teoría pide, aunque después salgan no significativas: eso también es un resultado.</div>
+        <div class="gp-opciones">${sug.map((v) => `
+          <button class="gp-op ${guia.xs.some((x) => x.nombre === v.nombre) ? 'marcada' : ''}" data-x="${esc(v.nombre)}">
+            <b>${esc(v.comoSeEscribe)}</b><small>${esc(v.etiqueta || '')}</small>
+            ${v.aviso ? `<span class="tipo">${v.aviso.replace(/<[^>]+>/g, '')}</span>` : ''}</button>`).join('')}</div>
+        ${guia.xs.length ? `<div class="guia-acciones">
+          <button class="btn" id="btnArmarPlan">📄 Ármame el do-file y guíame paso a paso</button>
+        </div>` : '<div class="gp-ayuda" style="margin-top:10px">Marca al menos una para continuar.</div>'}
+      </div>`);
+    }
+  }
+
+  partes.push('</div>');
+  c.innerHTML = partes.join('');
+
+  c.querySelectorAll('[data-y]').forEach((el) => el.addEventListener('click', () => {
+    guia.y = el.dataset.y;
+    guia.clas = clasificarY(ses.ds, guia.y);
+    guia.xs = [];
+    pintarGuia();
+  }));
+  c.querySelectorAll('[data-x]').forEach((el) => el.addEventListener('click', () => {
+    const nombre = el.dataset.x;
+    const i = guia.xs.findIndex((x) => x.nombre === nombre);
+    if (i >= 0) guia.xs.splice(i, 1);
+    else guia.xs.push(sugerirX(ses.ds, guia.y).find((v) => v.nombre === nombre));
+    pintarGuia();
+  }));
+  c.querySelectorAll('[data-correr]').forEach((el) => el.addEventListener('click', () => {
+    correrBloque(el.dataset.correr);
+    setTimeout(() => {
+      if (guia.y && ses.ds.existe(guia.y)) guia.clas = clasificarY(ses.ds, guia.y);
+      pintarGuia();
+    }, 30);
+  }));
+  c.querySelectorAll('[data-ir]').forEach((el) => el.addEventListener('click', () => {
+    cambiarVista('modelos');
+    const m = MODELOS_CATALOGO.find((x) => x.n === Number(el.dataset.ir));
+    const t = m && $('#mod-' + m.id);
+    if (t) { t.scrollIntoView({ behavior: 'smooth', block: 'start' }); t.classList.add('resaltado'); setTimeout(() => t.classList.remove('resaltado'), 1600); }
+  }));
+  const bp = $('#btnArmarPlan');
+  if (bp) bp.addEventListener('click', () => {
+    const plan = armarPlan(ses.ds, guia.y, guia.xs, guia.clas);
+    cargarPlanGuiado(plan);
+  });
+}
+
+/** Mete un do-file hecho a la medida en el editor, con sus pasos. */
+function cargarPlanGuiado(plan) {
+  doActivo = plan;
+  seccionesHechas.clear();
+  editor.value = textoCompleto(plan);
+  editor.dataset.deBiblioteca = 'guiado';
+  escribir(K.dofile, editor.value);
+  escribir(K.doActivo, null);
+  $('#doNombre').textContent = plan.nombre;
+  $('#doResumen').innerHTML = `${esc(plan.resumen)} &nbsp;·&nbsp; base <code>${esc(plan.base)}</code>`;
+  $('#salidaDo').innerHTML = '';
+  pintarNavSecciones();
+  cambiarVista('dofile');
+  toast(`Do-file armado: ${plan.secciones.length} pasos. Dale ▶ al primero.`);
 }
 
 // ─────────────────────────────────────────────── catálogo de modelos
