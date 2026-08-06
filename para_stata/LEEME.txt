@@ -1,0 +1,112 @@
+===============================================================================
+  PARA USAR EN STATA DE VERDAD
+===============================================================================
+
+Estos archivos NO son del simulador: son para abrirlos en Stata instalado
+en tu computadora.
+
+-------------------------------------------------------------------------------
+  QUÉ HAY AQUÍ
+-------------------------------------------------------------------------------
+
+  enemdu_eloro_crudo.csv        La base SIN DEPURAR. 3.426 filas, 17 columnas.
+                                Es la que tienes que limpiar.
+
+  01_depurar_etiquetar.do       Deja la base lista: convierte los textos,
+                                arregla los códigos de no respuesta, pone
+                                todas las etiquetas y crea las variables.
+                                Guarda el resultado como .dta
+
+  02_orden_por_modelo.do        El orden de los comandos, modelo por modelo:
+                                descriptivas -> modelo -> supuestos ->
+                                postestimación. Es la lista de referencia.
+
+-------------------------------------------------------------------------------
+  CÓMO EMPEZAR
+-------------------------------------------------------------------------------
+
+  1. Guarda los tres archivos en UNA MISMA CARPETA.
+
+  2. Abre Stata. Abre el archivo 01_depurar_etiquetar.do
+     (Menú: File > Open, y elige el .do)
+
+  3. En la línea que dice   cd "..."   cambia la ruta por la carpeta
+     donde guardaste los archivos. Por ejemplo:
+
+         cd "C:/Users/TuNombre/Documents/econometria"
+
+     OJO CON LAS BARRAS: en Stata las rutas van con  /  o con  \\
+     NUNCA con una sola  \  , porque esa barra tiene otro significado.
+
+  4. Ejecuta todo el do-file (el botón "Execute" o Ctrl+D).
+     Si algo falla, Stata se detiene ahí y te dice en qué línea.
+
+  5. Cuando termine, tendrás enemdu_eloro_limpia.dta
+     Ahora abre 02_orden_por_modelo.do y ve corriendo por bloques.
+
+-------------------------------------------------------------------------------
+  QUÉ TIENE DE SUCIO ESTA BASE (a propósito)
+-------------------------------------------------------------------------------
+
+  * ingreso_txt está guardado como TEXTO, con tres formatos mezclados:
+        "1.234,50"   punto de miles + coma decimal
+        "554,31"     solo coma decimal
+        "843.47"     punto decimal
+    y además "NA", "s/i" y celdas vacías (unos 210 casos).
+
+    LA REGLA QUE LO RESUELVE: el punto solo es separador de miles cuando en
+    el MISMO número hay una coma. Si no hay coma, ese punto es el decimal.
+    Está resuelto en el paso 3 del do-file 01.
+
+  * sexo_txt viene con 11 formas distintas de escribir dos categorías:
+    "Hombre", "hombre", "HOMBRE", "Hombre ", "H", "Mujer", "MUJER ", "M"...
+    Si haces encode sin limpiar antes, te salen 11 categorías.
+
+  * satisf_txt viene en palabras. Ojo: encode las ordena ALFABÉTICAMENTE
+    (Feliz, Muy feliz, Muy triste, Normal, Triste), que NO es el orden de
+    la escala. Por eso en el do-file se arma a mano.
+
+  * 14 filas repetidas exactas.
+
+  * Códigos de no respuesta: edad=99, educ=99, horas=999.
+
+  * Valores imposibles: 4 personas de 250 años, 5 ingresos de 999999.
+
+-------------------------------------------------------------------------------
+  PAQUETES QUE HAY QUE INSTALAR (una sola vez, con internet)
+-------------------------------------------------------------------------------
+
+  Dos comandos del do-file 02 no vienen con Stata; se bajan gratis:
+
+      ssc install estout          -> esttab, para las tablas de Word
+      ssc install spost13_ado     -> mlogtest, para probar el supuesto IIA
+
+  Si no los instalas, esas dos líneas fallan y el resto corre igual.
+  En el do-file están comentadas para que no te detengan.
+
+-------------------------------------------------------------------------------
+  EL ORDEN QUE NO SE CAMBIA
+-------------------------------------------------------------------------------
+
+  1. Conocer la base        describe, codebook
+  2. Depurar                duplicates, destring, encode, mvdecode
+  3. Definir la muestra     drop if missing(...)     <- UNA SOLA VEZ
+  4. Transformar/etiquetar  gen, recode, label
+  5. Descriptivas           summarize, tab, correlate, histogram
+  6. Modelo                 reg, logit, mlogit...
+  7. Supuestos              estat vif, ovtest, hettest, swilk
+  8. Postestimación         margins, lroc, estat classification
+  9. Reportar               estimates store, esttab
+
+  El paso 3 se hace UNA vez porque si cada modelo bota filas distintas,
+  los R2 dejan de ser comparables entre sí.
+
+  Los supuestos, en orden de GRAVEDAD real:
+      1º  forma funcional (estat ovtest)  -> el más grave: sesga los coeficientes
+      2º  multicolinealidad (estat vif)   -> grave si VIF > 10
+      3º  heterocedasticidad (hettest)    -> se arregla con robust, nada más
+      4º  normalidad de residuos (swilk)  -> casi nunca importa con N grande
+
+===============================================================================
+  Generado por StataProfe · https://fredyaldairo-commits.github.io/stataprofe/
+===============================================================================

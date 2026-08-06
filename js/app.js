@@ -1066,6 +1066,24 @@ function pintarAyuda() {
   const nombres = { datos: 'Abrir y manejar datos', desc: 'Estadística descriptiva', modelo: 'Modelos',
     post: 'Después del modelo', graf: 'Gráficos', sistema: 'Sistema' };
   $('#ayudaCuerpo').innerHTML = `<div class="doc">
+    <h2>Para usar en Stata de verdad</h2>
+    <p>Estos archivos no son del simulador: se descargan y se abren en el Stata que tengas instalado. Guárdalos <strong>en una misma carpeta</strong>.</p>
+    <div class="descargas">
+      <a class="desc-item" href="para_stata/enemdu_eloro_crudo.csv" download>
+        <span class="di">📊</span><span><b>enemdu_eloro_crudo.csv</b>
+        <small>La base sin depurar: 3.426 filas con textos, códigos 99, repetidos y atípicos. Es la que hay que limpiar.</small></span></a>
+      <a class="desc-item" href="para_stata/01_depurar_etiquetar.do" download>
+        <span class="di">🧹</span><span><b>01_depurar_etiquetar.do</b>
+        <small>Depura, convierte con <code>destring</code> y <code>encode</code>, etiqueta todo, recodifica y guarda el .dta limpio.</small></span></a>
+      <a class="desc-item" href="para_stata/02_orden_por_modelo.do" download>
+        <span class="di">📋</span><span><b>02_orden_por_modelo.do</b>
+        <small>El orden de los comandos modelo por modelo: descriptivas → modelo → supuestos → postestimación.</small></span></a>
+      <a class="desc-item" href="para_stata/LEEME.txt" download>
+        <span class="di">📄</span><span><b>LEEME.txt</b>
+        <small>Cómo empezar, qué tiene de sucio la base y qué paquetes instalar.</small></span></a>
+    </div>
+    <p class="mini">En el <code>cd "..."</code> del do-file cambia la ruta por tu carpeta. En Stata las rutas van con <code>/</code> o con <code>\\\\</code>, nunca con una sola <code>\\</code>.</p>
+
     <h2>Cómo funciona esto</h2>
     <p>Escribe comandos de Stata en la consola. <strong>Se ejecutan de verdad</strong>: cada número sale de un cálculo real sobre los datos que tengas abiertos, no de un ejemplo guardado.</p>
     <p>Si escribes algo mal, no te sale un error seco: te digo <strong>qué falta y cómo debería ir</strong>. Y cuando salga un resultado, te lo interpreto: qué significa el coeficiente, si es significativo, si el efecto es grande o chico de verdad, y qué revisar después.</p>

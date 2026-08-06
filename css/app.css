@@ -749,6 +749,17 @@ table.datos td.num{text-align:right}
 .ayuda-cuerpo td{padding:9px 10px; border-bottom:1px solid var(--line2); vertical-align:top}
 .ayuda-cuerpo .tabla-wrap{overflow-x:auto}
 
+/* ───────────────────────── descargas para Stata real */
+.descargas{display:grid; grid-template-columns:repeat(auto-fit,minmax(280px,1fr)); gap:9px; margin:14px 0}
+.desc-item{
+  display:flex; align-items:flex-start; gap:11px; text-decoration:none; color:var(--ink);
+  background:var(--card); border:1px solid var(--line); border-radius:10px; padding:12px 14px;
+}
+.desc-item:hover{border-color:var(--blue); background:var(--blue-bg)}
+.desc-item .di{font-size:21px; flex:none; line-height:1.2}
+.desc-item b{font-family:var(--m); font-size:13.5px; color:var(--blue); display:block}
+.desc-item small{font-size:13.5px; color:var(--ink3); line-height:1.45; display:block; margin-top:3px}
+
 /* ───────────────────────── modal */
 .modal{position:fixed; inset:0; background:rgba(10,16,28,.55); backdrop-filter:blur(3px); display:none; align-items:flex-start; justify-content:center; padding:6vh 16px 16px; z-index:80}
 .modal.abierto{display:flex}
