@@ -8,6 +8,7 @@ import { MODELOS_CATALOGO, PRIMOS, NIVELES_DIF, REGLA, SUPUESTOS_MCO } from './m
 import { DOFILES, FAMILIAS_DO, textoCompleto } from './dofiles.js';
 import { clasificarY, sugerirX, armarPlan } from './guia.js';
 import { CONCEPTOS } from './conceptos.js';
+import * as Mem from './memoria.js';
 import { preguntarGemini, tieneClave, guardarClave, borrarClave, probarClave, modeloElegido, listarModelos } from './gemini.js';
 import { esNulo, fmtG, fmtP, padI, corta } from './core/util.js';
 
@@ -210,6 +211,16 @@ function correr(linea, destino = $('#salida'), { eco = true } = {}) {
   destino.scrollTop = destino.scrollHeight;
   ses.registro.push({ linea, bloques });
   anotarRevision(linea, bloques);
+  // el profe también aprende de los errores que repites al escribir
+  const err = bloques.find((b) => b.t === 'err');
+  if (err) {
+    const reg = Mem.registrarError(err.codigo, err.mensaje, linea);
+    if (reg && reg.veces >= 3) {
+      const c = Mem.CONSEJO_ERROR[reg.clave];
+      if (c) destino.appendChild(nodoDe({ t: 'aviso',
+        s: `📌 <strong>Van ${reg.veces} veces</strong> que te pasa lo de ${c.que}. ${c.consejo}` }));
+    }
+  }
   revisarLeccion(linea, bloques);
   pintarEstado();
   pintarVarsLateral();
@@ -1539,6 +1550,90 @@ $('#fabProfe').addEventListener('click', () => {
   }
 });
 $('#chatX').addEventListener('click', () => $('#chatProfe').classList.remove('abierto'));
+
+// ─────────────────────────────────────────────── cuaderno "Tus dudas"
+$('#btnDudas').addEventListener('click', () => {
+  const c = $('#cuaderno');
+  if (c.classList.contains('abierto')) { c.classList.remove('abierto'); return; }
+  pintarCuaderno();
+  c.classList.add('abierto');
+});
+
+function pintarCuaderno() {
+  const p = Mem.perfil();
+  const d = Mem.dudas().slice().reverse();
+  const errs = Object.entries(Mem.errores()).filter(([, v]) => v.n >= 2)
+    .sort((a, b) => b[1].n - a[1].n);
+
+  const partes = [`<div class="cua-cab">
+      <b>Lo que el profe ha aprendido de ti</b>
+      <button class="cua-x" id="cuaX">✕</button>
+    </div>
+    <div class="cua-cuerpo">`];
+
+  if (!d.length && !errs.length) {
+    partes.push(`<p class="mini">Todavía no hay nada anotado. A medida que preguntes en el chat y corras comandos, aquí voy guardando en qué te trabas para explicártelo distinto.</p>`);
+  } else {
+    partes.push(`<div class="cua-resumen">
+      <span><b>${p.preguntas}</b> preguntas</span>
+      <span><b>${p.sirvio}</b> te sirvieron</span>
+      <span><b>${p.noEntendio}</b> no entendiste</span>
+      <span>nivel: <b>${p.nivel === 'basico' ? 'explicar más fácil' : p.nivel === 'avanzado' ? 'ir más directo' : 'normal'}</b></span>
+    </div>`);
+
+    if (p.temasFlojos.length) {
+      partes.push(`<div class="cua-sec"><span class="et">Temas en los que más vuelves</span>
+        ${p.temasFlojos.map((t) => `<div class="cua-tema">
+          <span class="ct">${esc(t.nombre)}</span><span class="cv">${t.veces}×</span>
+          <button data-concepto="${esc(t.concepto)}">Repasar</button></div>`).join('')}</div>`);
+    }
+    if (errs.length) {
+      partes.push(`<div class="cua-sec"><span class="et">Errores que repites al escribir</span>
+        ${errs.map(([clave, v]) => {
+          const c = Mem.CONSEJO_ERROR[clave] || {};
+          return `<div class="cua-err"><b>${esc(c.que || clave)} · ${v.n}×</b><small>${c.consejo || ''}</small></div>`;
+        }).join('')}</div>`);
+    }
+    if (d.length) {
+      partes.push(`<div class="cua-sec"><span class="et">Tus preguntas</span>
+        ${d.slice(0, 30).map((x) => `<details class="cua-duda">
+          <summary>${x.util === true ? '👍' : x.util === false ? '🤔' : '·'} ${esc(x.p)}</summary>
+          <div class="cua-resp">${x.r}</div></details>`).join('')}</div>`);
+    }
+    partes.push(`<div class="cua-pie">
+      <button class="btn sec" id="cuaBajar">Descargar mis dudas</button>
+      <button class="btn sec" id="cuaBorrar">Borrar la memoria</button>
+    </div>`);
+  }
+  partes.push('</div>');
+  $('#cuaderno').innerHTML = partes.join('');
+
+  $('#cuaX').addEventListener('click', () => $('#cuaderno').classList.remove('abierto'));
+  $$('#cuaderno [data-concepto]').forEach((b) => b.addEventListener('click', () => {
+    concActivo = b.dataset.concepto;
+    cambiarVista('conceptos');
+    $('#cuaderno').classList.remove('abierto');
+    $('#chatProfe').classList.remove('abierto');
+  }));
+  const bb = $('#cuaBajar');
+  if (bb) bb.addEventListener('click', () => {
+    const L = ['StataProfe — mis dudas', '='.repeat(40), ''];
+    for (const x of Mem.dudas()) {
+      L.push(`P: ${x.p}`);
+      L.push(`R: ${String(x.r).replace(/<br\s*\/?>/gi, '\n').replace(/<[^>]+>/g, '')}`);
+      L.push(x.util === true ? '[me sirvió]' : x.util === false ? '[no entendí]' : '');
+      L.push('');
+    }
+    descargarTexto('mis_dudas_stataprofe.txt', L.join('\n'));
+  });
+  const bx = $('#cuaBorrar');
+  if (bx) bx.addEventListener('click', () => {
+    if (!confirm('Esto borra tus preguntas guardadas y lo que el profe aprendió de ti. ¿Seguro?')) return;
+    Mem.borrarDudas(); Mem.borrarErrores();
+    pintarCuaderno();
+    toast('Memoria borrada');
+  });
+}
 function msgChat(quien, texto) {
   const d = document.createElement('div');
   d.className = 'msg ' + quien;
@@ -1574,17 +1669,64 @@ $('#chatForm').addEventListener('submit', async (e) => {
     const ctx = contextoParaGemini();
     const r = await preguntarGemini(q, ctx);
     pensando.remove();
-    msgChat('profe', r);
+    const nodo = msgChat('profe', r);
+    // se guarda en la memoria y se ofrece marcarla
+    const duda = Mem.guardarDuda(q, r);
+    ponerValoracion(nodo, duda.id);
+    sugerirRepaso();
   } catch (err) {
     pensando.remove();
     msgChat('profe', 'No pude responder: ' + esc(err.message));
   }
 });
 
+/** Botones para decir si la respuesta sirvió: de ahí aprende el profe. */
+function ponerValoracion(nodo, id) {
+  const barra = document.createElement('div');
+  barra.className = 'msg-val';
+  barra.innerHTML = `<button data-v="1" title="Me sirvió">👍</button>
+    <button data-v="0" title="No entendí — explícamelo más fácil la próxima">🤔 no entendí</button>`;
+  barra.querySelectorAll('button').forEach((b) => b.addEventListener('click', () => {
+    const util = b.dataset.v === '1';
+    Mem.marcarDuda(id, util);
+    barra.innerHTML = util
+      ? '<span class="ok">👍 anotado, seguiré explicando así</span>'
+      : '<span class="ojo">🤔 anotado: te lo voy a explicar más fácil la próxima vez</span>';
+    sugerirRepaso();
+  }));
+  nodo.appendChild(barra);
+  $('#chatMsgs').scrollTop = $('#chatMsgs').scrollHeight;
+}
+
+/** Si un tema se repite, se le ofrece el apartado donde está explicado. */
+function sugerirRepaso() {
+  const r = Mem.queRepasar();
+  if (!r || $('#chatMsgs').querySelector(`[data-repaso="${r.concepto}"]`)) return;
+  const d = document.createElement('div');
+  d.className = 'msg profe repaso';
+  d.dataset.repaso = r.concepto;
+  d.innerHTML = `${r.texto}<div class="repaso-btns">
+    <button data-ir-concepto="${esc(r.concepto)}">📖 Ver el apartado</button>
+    <button data-ir-modelo="${r.modelo}">📄 Ver el do-file</button></div>`;
+  d.querySelector('[data-ir-concepto]').addEventListener('click', () => {
+    concActivo = r.concepto;
+    cambiarVista('conceptos');
+    $('#chatProfe').classList.remove('abierto');
+  });
+  d.querySelector('[data-ir-modelo]').addEventListener('click', () => {
+    const df = DOFILES.find((x) => x.n === r.modelo);
+    if (df) { cargarDoFile(df.id); $('#chatProfe').classList.remove('abierto'); }
+  });
+  $('#chatMsgs').appendChild(d);
+  $('#chatMsgs').scrollTop = $('#chatMsgs').scrollHeight;
+}
+
 function contextoParaGemini() {
   const ult = ses.registro.slice(-4);
   const ds = ses.ds;
   return {
+    historial: Mem.historialReciente(6),
+    perfil: Mem.resumenParaPrompt(),
     base: ds.cargado ? { nombre: ds.nombre, n: ds.n, variables: ds.vars.map((v) => `${v.name} (${v.type === 'string' ? 'texto' : 'número'}${v.label ? ': ' + v.label : ''})`) } : null,
     ultimosComandos: ult.map((r) => r.linea),
     ultimoModelo: ses.ultimoModelo ? {

@@ -807,6 +807,51 @@ table.datos td.num{text-align:right}
 .chat-form{display:flex; gap:7px; padding:11px 13px; border-top:1px solid var(--line)}
 .chat-form input{flex:1; min-width:0; font-family:var(--b); font-size:15px; padding:10px 12px; border:1px solid var(--line); border-radius:9px; background:var(--card2); color:var(--ink)}
 .chat-form button{background:var(--blue); color:#fff; border:0; border-radius:9px; padding:0 16px; font-size:17px}
+.chat-acc{display:flex; align-items:center; gap:6px}
+.chat-acc #btnDudas{
+  background:var(--card2); border:1px solid var(--line); color:var(--ink2);
+  border-radius:99px; padding:4px 10px; font-size:11.5px; font-family:var(--m);
+}
+.chat-acc #btnDudas:hover{background:var(--card3); color:var(--ink)}
+
+/* valorar una respuesta: de ahí aprende */
+.msg-val{display:flex; gap:6px; margin-top:8px; flex-wrap:wrap}
+.msg-val button{
+  background:var(--card); border:1px solid var(--line); border-radius:99px;
+  padding:3px 10px; font-size:12px; color:var(--ink2);
+}
+.msg-val button:hover{border-color:var(--blue); color:var(--ink)}
+.msg-val .ok{color:var(--sig); font-size:12.5px}
+.msg-val .ojo{color:var(--ochre); font-size:12.5px}
+.msg.repaso{background:var(--ochre-bg); border-left:3px solid var(--ochre); max-width:100%}
+.repaso-btns{display:flex; gap:6px; margin-top:8px; flex-wrap:wrap}
+.repaso-btns button{
+  background:var(--card); border:1px solid var(--ochre); color:var(--ochre);
+  border-radius:99px; padding:4px 11px; font-size:12.5px;
+}
+.repaso-btns button:hover{background:var(--ochre); color:var(--card)}
+
+/* cuaderno */
+.cuaderno{position:absolute; inset:0; background:var(--card); border-radius:14px; display:none; flex-direction:column; z-index:5}
+.cuaderno.abierto{display:flex}
+.cua-cab{display:flex; justify-content:space-between; align-items:center; padding:12px 15px; border-bottom:1px solid var(--line); font-family:var(--d); font-size:14.5px}
+.cua-x{background:none; border:0; color:var(--ink3); font-size:14px}
+.cua-cuerpo{flex:1; min-height:0; overflow-y:auto; padding:12px 14px}
+.cua-resumen{display:flex; flex-wrap:wrap; gap:10px; background:var(--card2); border-radius:9px; padding:10px 12px; font-size:13px; color:var(--ink3)}
+.cua-resumen b{color:var(--ink); font-family:var(--d)}
+.cua-sec{margin-top:14px}
+.cua-sec .et{font-family:var(--m); font-size:9.5px; letter-spacing:.12em; text-transform:uppercase; color:var(--ink3); display:block; margin-bottom:6px}
+.cua-tema{display:flex; align-items:center; gap:8px; padding:6px 0; border-bottom:1px solid var(--line2)}
+.cua-tema .ct{flex:1; font-size:14.5px}
+.cua-tema .cv{font-family:var(--m); font-size:11.5px; color:var(--ochre)}
+.cua-tema button{background:var(--blue-bg); border:1px solid var(--blue); color:var(--blue); border-radius:99px; padding:3px 10px; font-size:12px}
+.cua-err{padding:7px 0; border-bottom:1px solid var(--line2)}
+.cua-err b{font-size:14px; display:block}
+.cua-err small{font-size:13px; color:var(--ink3); line-height:1.4; display:block; margin-top:2px}
+.cua-duda{border-bottom:1px solid var(--line2); padding:6px 0}
+.cua-duda summary{cursor:pointer; font-size:14.5px; line-height:1.4}
+.cua-resp{background:var(--card2); border-radius:8px; padding:9px 11px; margin-top:6px; font-size:14px; line-height:1.5}
+.cua-pie{display:flex; gap:7px; margin-top:16px; flex-wrap:wrap}
 /* en pantallas chicas el chat ocupa casi todo, si no no se lee nada */
 @media(max-width:620px){
   .chat{right:8px; left:8px; bottom:8px; width:auto; height:min(86vh, 640px)}

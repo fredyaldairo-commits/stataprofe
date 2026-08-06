@@ -141,6 +141,12 @@ export async function listarModelos() {
 
 function armarPrompt(pregunta, ctx) {
   const partes = [];
+  // lo que el profe ha aprendido de ella en conversaciones anteriores
+  if (ctx && ctx.perfil) {
+    partes.push('--- LO QUE YA SABES DE ESTA ESTUDIANTE ---');
+    partes.push(ctx.perfil);
+    partes.push('');
+  }
   if (ctx && ctx.base) {
     partes.push(`Base abierta: ${ctx.base.nombre}, ${ctx.base.n} observaciones.`);
     partes.push(`Variables: ${ctx.base.variables.slice(0, 30).join('; ')}`);
@@ -162,9 +168,17 @@ function armarPrompt(pregunta, ctx) {
 
 export async function preguntarGemini(pregunta, ctx) {
   const usarProxy = await detectarProxy();
+  // el historial va como turnos de verdad, para que la conversación tenga hilo
+  const contents = [];
+  for (const h of (ctx && ctx.historial) || []) {
+    contents.push({ role: 'user', parts: [{ text: h.p }] });
+    contents.push({ role: 'model', parts: [{ text: String(h.r || '').replace(/<[^>]+>/g, '').slice(0, 700) }] });
+  }
+  contents.push({ role: 'user', parts: [{ text: armarPrompt(pregunta, ctx) }] });
+
   const cuerpo = {
     systemInstruction: { parts: [{ text: SISTEMA }] },
-    contents: [{ role: 'user', parts: [{ text: armarPrompt(pregunta, ctx) }] }],
+    contents,
     generationConfig: { temperature: 0.4, maxOutputTokens: 900 },
   };
 
