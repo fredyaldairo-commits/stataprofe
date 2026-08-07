@@ -625,8 +625,13 @@ registrarComando('testparm', (p, ses) => {
   const pedido = p.tokens[0];
   if (!pedido) throw new ErrorStata('testparm necesita un grupo', 100,
     'Por ejemplo: <code>testparm i.tamano</code>');
-  const nm = pedido.replace(/^i\./, '');
-  const cuales = fit.names.filter((n) => new RegExp(`^\\d+\\.${nm}$`).test(n) || n === nm);
+  // acepta tanto "i.tamano" como interacciones "i.tamano#i.mujer".
+  // Cada parte puede venir con o sin el número de nivel delante.
+  const partes = pedido.split('#').map((x) => x.replace(/^[ic]b?\d*\./, '').trim());
+  const patron = '^' + partes.map((p) => `(?:-?\\d+\\.)?${p.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}`).join('#') + '$';
+  const re = new RegExp(patron);
+  const cuales = fit.names.filter((n) => re.test(n));
+  const nm = partes.join('#');
   if (!cuales.length) throw new ErrorStata(`no encuentro ${pedido} en el modelo`, 111,
     `Variables del modelo: ${fit.names.join(', ')}`);
   const R = cuales.map((c) => {

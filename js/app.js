@@ -10,6 +10,7 @@ import { clasificarY, sugerirX, armarPlan } from './guia.js';
 import { CONCEPTOS } from './conceptos.js';
 import * as Mem from './memoria.js';
 import { PRUEBAS, evaluarTodas, resumen as resumenPruebas } from './pruebas.js';
+import { CHULETA, secuencia } from './chuleta.js';
 import { preguntarGemini, tieneClave, guardarClave, borrarClave, probarClave, modeloElegido, listarModelos } from './gemini.js';
 import { esNulo, fmtG, fmtP, padI, corta } from './core/util.js';
 
@@ -667,6 +668,7 @@ function cambiarVista(v) {
   if (v === 'empezar') pintarGuia();
   if (v === 'conceptos') pintarConceptos();
   if (v === 'supuestos') pintarSupuestos();
+  if (v === 'chuleta') pintarChuleta();
   if (v === 'ayuda') pintarAyuda();
   if (v === 'consola') setTimeout(() => $('#entrada').focus(), 60);
 }
@@ -1025,6 +1027,85 @@ function correrBloque(texto) {
     if (res.some((x) => x.t === 'err')) break;
   }
   salida.scrollTop = salida.scrollHeight;
+}
+
+// ─────────────────────────────────────────────── chuleta: los comandos en orden
+let chuActivo = CHULETA[0].id;
+
+function pintarChuleta() {
+  $('#chuNav').innerHTML = CHULETA.map((m) =>
+    `<button class="chu-chip ${m.id === chuActivo ? 'on' : ''}" data-c="${m.id}">${m.icono} ${esc(m.nombre)}</button>`).join('');
+  $$('#chuNav .chu-chip').forEach((b) => b.addEventListener('click', () => {
+    chuActivo = b.dataset.c; pintarChuleta(); $('#chuCuerpo').scrollTop = 0;
+  }));
+
+  const m = CHULETA.find((x) => x.id === chuActivo) || CHULETA[0];
+  const pasos = m.pasos.map((p, i) => `
+    <div class="chu-paso">
+      <div class="cp-cab">
+        <b>${i + 1}. ${esc(p.paso)}</b>
+        <button class="cp-run" data-run="${i}" title="Correr este bloque">▶</button>
+      </div>
+      <div class="cp-cmds">${p.comandos.map((c) =>
+        `<button class="cp-cmd" data-cmd="${esc(c)}" title="Escribirlo en la consola">${esc(c)}</button>`).join('')}</div>
+      <div class="cp-busca"><span class="et">Qué mirar</span>${esc(p.busca)}</div>
+    </div>`).join('');
+
+  $('#chuCuerpo').innerHTML = `<div class="chu-doc">
+    <div class="chu-intro">
+      <div class="ci-icono">${m.icono}</div>
+      <div><b>${esc(m.nombre)}</b><small>${esc(m.cuando)}</small></div>
+    </div>
+    <div class="chu-acciones">
+      <button class="btn" id="chuCorrerTodo">▶ Correr la secuencia completa</button>
+      <button class="btn sec" id="chuAlDo">Mandarla al do-file</button>
+      <button class="btn sec" id="chuCopiar">Copiar</button>
+      <button class="btn sec" id="chuBajar">Descargar .do</button>
+    </div>
+    ${pasos}
+    <div class="chu-pie">
+      <b>¿Y para practicar esto en el Stata de verdad?</b>
+      <p>Descarga la base sucia y los do-files, y ábrelos en tu Stata instalado. Es la misma base que usa el simulador.</p>
+      <div class="descargas">
+        <a class="desc-item" href="para_stata/enemdu_eloro_crudo.csv" download>
+          <span class="di">📊</span><span><b>enemdu_eloro_crudo.csv</b>
+          <small>3.426 filas sin depurar: textos, códigos 99, repetidos y atípicos.</small></span></a>
+        <a class="desc-item" href="para_stata/01_depurar_etiquetar.do" download>
+          <span class="di">🧹</span><span><b>01_depurar_etiquetar.do</b>
+          <small>La depuración completa, con destring, encode, decode y etiquetas.</small></span></a>
+        <a class="desc-item" href="para_stata/02_orden_por_modelo.do" download>
+          <span class="di">📋</span><span><b>02_orden_por_modelo.do</b>
+          <small>Esta misma chuleta, como do-file para Stata real.</small></span></a>
+        <a class="desc-item" href="para_stata/LEEME.txt" download>
+          <span class="di">📄</span><span><b>LEEME.txt</b>
+          <small>Cómo empezar y qué paquetes instalar.</small></span></a>
+      </div>
+    </div>
+  </div>`;
+
+  $$('#chuCuerpo .cp-cmd').forEach((b) => b.addEventListener('click', () => {
+    cambiarVista('consola');
+    $('#entrada').value = b.dataset.cmd;
+    $('#entrada').focus();
+  }));
+  $$('#chuCuerpo .cp-run').forEach((b) => b.addEventListener('click', () => {
+    correrBloque(m.pasos[Number(b.dataset.run)].comandos.join('\n'));
+  }));
+  $('#chuCorrerTodo').addEventListener('click', () => correrBloque(
+    m.pasos.flatMap((p) => p.comandos).join('\n')));
+  $('#chuAlDo').addEventListener('click', () => {
+    const sep = editor.value.trim() ? '\n\n' : '';
+    editor.value = editor.value + sep + secuencia(m.id) + '\n';
+    escribir(K.dofile, editor.value);
+    cambiarVista('dofile');
+    toast('Secuencia agregada al do-file');
+  });
+  $('#chuCopiar').addEventListener('click', async () => {
+    try { await navigator.clipboard.writeText(secuencia(m.id)); toast('Copiado'); }
+    catch { toast('No pude copiar; usa Descargar .do'); }
+  });
+  $('#chuBajar').addEventListener('click', () =>
+    descargarTexto(`chuleta_${m.id}.do`, secuencia(m.id)));
 }
 
 // ─────────────────────────────────────────────── supuestos: ¿pasa o no pasa?
